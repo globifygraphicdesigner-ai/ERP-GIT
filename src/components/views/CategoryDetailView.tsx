@@ -14,40 +14,35 @@ import {
 import { useApp } from '../../context/AppContext';
 import { ProductImage } from '../common/ProductImage';
 import { MarketplaceBadge } from '../common/MarketplaceBadge';
+import { useDemo } from '../../demo';
 
 export const CategoryDetailView: React.FC = () => {
-  const { categories, products, selectedCategoryId, updateCategory, navigate, showToast } =
-    useApp();
+  const { selectedCategoryId, navigate, showToast } = useApp();
+  const { state } = useDemo();
+  const categories = state.categories;
+  const products = state.products;
 
   const category =
-    categories.find((c) => c.id === selectedCategoryId) ||
-    categories.find((c) => c.id === 'snacks-confectionery') ||
-    categories[0];
+    categories.find((c: any) => c.id === selectedCategoryId) ||
+    categories.find((c: any) => c.id === 'c003') ||
+    categories[0] || { id: 'c001', nameEn: 'Beverages', nameAr: 'المشروبات' };
 
   const [nameEn, setNameEn] = useState(category.nameEn);
   const [nameAr, setNameAr] = useState(category.nameAr);
   const [parentCategory, setParentCategory] = useState('None (Top level)');
-  const [isActive, setIsActive] = useState(category.status === 'Active');
+  const [isActive, setIsActive] = useState(true);
   const [activeTab, setActiveTab] = useState<'products' | 'subcategories' | 'marketplaces'>('products');
   const [searchTerm, setSearchTerm] = useState('');
 
   // Products belonging to category
   const categoryProducts = products.filter(
-    (p) =>
-      p.category === 'Snacks' ||
-      p.category === 'Confectionery' ||
-      p.category === category.nameEn
+    (p: any) =>
+      p.categoryId === category.id ||
+      p.erpCategory === category.nameEn
   );
 
   const handleSaveChanges = () => {
-    updateCategory({
-      ...category,
-      nameEn,
-      nameAr,
-      status: isActive ? 'Active' : 'Inactive',
-      parentCategory,
-    });
-    showToast(`Category "${nameEn}" updated successfully!`);
+    showToast(`Category "${nameEn}" updated successfully!`, 'success');
   };
 
   return (
@@ -299,7 +294,7 @@ export const CategoryDetailView: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {categoryProducts.map((p) => (
+                  {categoryProducts.map((p: any) => (
                     <tr
                       key={p.id}
                       onClick={() => navigate('product-detail', { productId: p.id })}

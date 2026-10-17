@@ -4,44 +4,46 @@ import {
   Upload,
   BarChart2,
   Package,
-  Plus,
   Tag,
-  Network,
   FileSpreadsheet,
   Settings,
   HelpCircle,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useDemo } from '../../demo';
 import { ViewType } from '../../types';
 
 export const Sidebar: React.FC = () => {
   const { currentView, navigate } = useApp();
+  const { state, pendingMapping } = useDemo();
+  const editingFromFileMapping = !!pendingMapping?.fromFileMapping;
 
-  const navItems: { label: string; view: ViewType; icon: React.ElementType }[] = [
+  const newProductsCount = state.products.filter((p) => p.status === 'new').length;
+
+  const navItems: { label: string; view: ViewType; icon: React.ElementType; badge?: number }[] = [
     { label: 'Dashboard', view: 'dashboard', icon: LayoutDashboard },
     { label: 'Uploads', view: 'uploads', icon: Upload },
-    { label: 'Reports', view: 'reports', icon: BarChart2 },
+    { label: 'Reports', view: 'reports-stock', icon: BarChart2 },
     { label: 'Catalogue', view: 'catalogue', icon: Package },
+    { label: 'New products', view: 'new-products', icon: Package, badge: newProductsCount || undefined },
     { label: 'Markups', view: 'markups', icon: Tag },
-    { label: 'Category mapping', view: 'category-mapping', icon: Network },
-    { label: 'Templates', view: 'templates', icon: FileSpreadsheet },
+    { label: 'File mapping', view: 'templates', icon: FileSpreadsheet },
   ];
 
   const isNavActive = (view: ViewType) => {
     if (currentView === view) return true;
-    if (view === 'reports' && (currentView === 'reports-stock' || currentView === 'reports-price-discrepancies' || currentView === 'reports-price-mismatches')) {
+    if (view === 'reports-stock' && (currentView === 'reports-stock' || currentView === 'reports-price-discrepancies' || currentView === 'outputs-generate')) {
       return true;
     }
-    if (view === 'uploads' && currentView === 'upload-review') return true;
+    if (view === 'templates' && currentView === 'column-mapping' && editingFromFileMapping) return true;
+    if (view === 'uploads' && (currentView === 'upload-review' || (currentView === 'column-mapping' && !editingFromFileMapping))) return true;
     if (
       view === 'catalogue' &&
-      (currentView === 'product-detail' ||
-        currentView === 'new-product' ||
-        currentView === 'categories' ||
-        currentView === 'category-detail')
+      (currentView === 'product-detail')
     ) {
       return true;
     }
+    if (view === 'new-products' && currentView === 'new-products') return true;
     return false;
   };
 
@@ -54,7 +56,7 @@ export const Sidebar: React.FC = () => {
           className="px-3 pb-6 flex items-center cursor-pointer select-none"
         >
           <span className="text-2xl font-bold tracking-tight text-[#0D6D4E]">
-            Shelf
+            Qorloop
           </span>
         </div>
 
@@ -78,7 +80,12 @@ export const Sidebar: React.FC = () => {
                     active ? 'text-[#0D6D4E]' : 'text-gray-500'
                   }`}
                 />
-                <span>{item.label}</span>
+                <span className="flex-1">{item.label}</span>
+                {item.badge !== undefined && item.badge > 0 && (
+                  <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold">
+                    {item.badge}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -100,12 +107,10 @@ export const Sidebar: React.FC = () => {
         </button>
 
         <button
-          onClick={() => navigate('onboarding')}
-          className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors text-left ${
-            currentView === 'onboarding'
-              ? 'bg-[#E8F5EE] text-[#0D6D4E]'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/70'
-          }`}
+          onClick={() => {
+            /* Help link - does NOT open onboarding */
+          }}
+          className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors text-left text-gray-600 hover:text-gray-900 hover:bg-gray-100/70"
         >
           <HelpCircle className="w-4 h-4 text-gray-500 shrink-0" />
           <span>Help</span>

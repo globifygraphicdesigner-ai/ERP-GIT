@@ -1,189 +1,336 @@
 import React, { useState } from 'react';
-import { Percent, Plus, Save, RotateCcw } from 'lucide-react';
+import {
+  Percent,
+  Search,
+  Plus,
+  Trash2,
+  TrendingUp,
+  AlertCircle,
+  CheckCircle2,
+  Info,
+} from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { MarketplaceBadge } from '../common/MarketplaceBadge';
+import { useDemo, MARKETPLACE_IDS, expectedPrice } from '../../demo';
+import type { MarketplaceId } from '../../demo';
+
+const MP_NAMES: Record<MarketplaceId, string> = {
+  talabat: 'Talabat',
+  snoonu: 'Snoonu',
+  rafeeq: 'Rafeeq',
+  keeta: 'Keeta',
+};
 
 export const MarkupsView: React.FC = () => {
   const { showToast } = useApp();
+  const {
+    state,
+    summary,
+    setMarketplaceMarkup,
+    setProductMarkup,
+  } = useDemo();
 
-  const [markups, setMarkups] = useState([
-    { marketplace: 'talabat', defaultMarkup: 20, rounding: '0.25', active: true },
-    { marketplace: 'snoonu', defaultMarkup: 20, rounding: '0.25', active: true },
-    { marketplace: 'rafeeq', defaultMarkup: 20, rounding: '0.50', active: true },
-    { marketplace: 'keeta', defaultMarkup: 25, rounding: 'Exact', active: false },
-  ]);
+  const [productSearch, setProductSearch] = useState('');
+  const [selectedProductId, setSelectedProductId] = useState('');
+  const [selectedMp, setSelectedMp] = useState<MarketplaceId>('talabat');
+  const [newMarkupPct, setNewMarkupPct] = useState<string>('15');
 
-  const [categoryOverrides, setCategoryOverrides] = useState([
-    { category: 'Beverages', marketplace: 'talabat', markup: 25 },
-    { category: 'Dairy & Eggs', marketplace: 'snoonu', markup: 12 },
-    { category: 'Snacks & Confectionery', marketplace: 'rafeeq', markup: 22 },
-  ]);
+  // Product search matches
+  const searchMatches = productSearch.trim()
+    ? state.products
+        .filter(
+          (p) =>
+            p.nameEn.toLowerCase().includes(productSearch.toLowerCase()) ||
+            p.barcode.includes(productSearch) ||
+            p.id.includes(productSearch)
+        )
+        .slice(0, 8)
+    : [];
 
-  const handleSave = () => {
-    showToast('Marketplace markups and rules updated successfully!');
+  const handleAddOverride = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedProductId) {
+      showToast('Please select a product from the search list', 'warning');
+      return;
+    }
+    const pct = parseFloat(newMarkupPct);
+    if (isNaN(pct) || pct < 0) {
+      showToast('Please enter a valid markup percentage', 'warning');
+      return;
+    }
+
+    const prod = state.products.find((p) => p.id === selectedProductId);
+    setProductMarkup(selectedProductId, selectedMp, pct);
+    showToast(
+      `Set custom markup of ${pct}% for ${prod?.nameEn} on ${MP_NAMES[selectedMp]}`,
+      'success'
+    );
+    setSelectedProductId('');
+    setProductSearch('');
+  };
+
+  const handleRemoveOverride = (productId: string, mp: MarketplaceId) => {
+    setProductMarkup(productId, mp, null);
+    showToast(`Removed custom markup override`, 'info');
   };
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6 animate-in fade-in duration-150">
+      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">
           Markups & Pricing Rules
         </h1>
-        <p className="text-xs text-gray-500 mt-0.5">
-          Configure default price markups and margins applied to ERP cost prices for each marketplace.
+        <p className="text-sm text-gray-500 mt-1">
+          Configure default price markups applied to ERP selling prices. Expected price = ERP price + markup (rounded to 0.05 QAR).
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        {/* Default Markups Table */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold text-gray-900">
-                Default marketplace markups
-              </h2>
-              <button
-                onClick={handleSave}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#0D6D4E] hover:bg-[#0b5c42] rounded-lg shadow-xs"
-              >
-                <Save className="w-3.5 h-3.5" />
-                <span>Save rules</span>
-              </button>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold">
-                  <tr>
-                    <th className="py-2.5 px-3">Marketplace</th>
-                    <th className="py-2.5 px-3">Default markup (%)</th>
-                    <th className="py-2.5 px-3">Rounding rule</th>
-                    <th className="py-2.5 px-3 text-right">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {markups.map((m, idx) => (
-                    <tr key={m.marketplace} className="hover:bg-gray-50">
-                      <td className="py-3 px-3">
-                        <MarketplaceBadge marketplace={m.marketplace as any} />
-                      </td>
-                      <td className="py-3 px-3">
-                        <div className="flex items-center gap-1.5">
-                          <input
-                            type="number"
-                            value={m.defaultMarkup}
-                            onChange={(e) => {
-                              const copy = [...markups];
-                              copy[idx].defaultMarkup = parseFloat(e.target.value) || 0;
-                              setMarkups(copy);
-                            }}
-                            className="w-20 border border-gray-200 rounded-lg p-1.5 text-xs font-semibold"
-                          />
-                          <span className="text-gray-400 font-medium">%</span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-3">
-                        <select
-                          value={m.rounding}
-                          onChange={(e) => {
-                            const copy = [...markups];
-                            copy[idx].rounding = e.target.value;
-                            setMarkups(copy);
-                          }}
-                          className="border border-gray-200 rounded-lg p-1.5 text-xs bg-white text-gray-700"
-                        >
-                          <option value="Exact">Exact</option>
-                          <option value="0.25">Round to 0.25 QAR</option>
-                          <option value="0.50">Round to 0.50 QAR</option>
-                        </select>
-                      </td>
-                      <td className="py-3 px-3 text-right">
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${
-                            m.active
-                              ? 'bg-[#DEF7EC] text-[#03543F]'
-                              : 'bg-gray-100 text-gray-600'
-                          }`}
-                        >
-                          {m.active ? 'Active' : 'Disabled'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Category Overrides */}
-          <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-bold text-gray-900">Category overrides</h2>
-                <p className="text-xs text-gray-500">
-                  Override the default markup for specific categories.
-                </p>
-              </div>
-              <button
-                onClick={() => showToast('Add new category override')}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 shadow-xs"
-              >
-                <Plus className="w-3.5 h-3.5 text-gray-500" />
-                <span>Add override</span>
-              </button>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold">
-                  <tr>
-                    <th className="py-2.5 px-3">Category</th>
-                    <th className="py-2.5 px-3">Marketplace</th>
-                    <th className="py-2.5 px-3">Custom markup</th>
-                    <th className="py-2.5 px-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {categoryOverrides.map((ov, i) => (
-                    <tr key={i} className="hover:bg-gray-50">
-                      <td className="py-3 px-3 font-medium text-gray-900">{ov.category}</td>
-                      <td className="py-3 px-3">
-                        <MarketplaceBadge marketplace={ov.marketplace as any} size="sm" />
-                      </td>
-                      <td className="py-3 px-3 font-semibold text-gray-900">{ov.markup}%</td>
-                      <td className="py-3 px-3 text-right">
-                        <button
-                          onClick={() => {
-                            setCategoryOverrides(categoryOverrides.filter((_, idx) => idx !== i));
-                            showToast('Override removed');
-                          }}
-                          className="text-red-600 hover:underline"
-                        >
-                          Remove
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Info Box */}
-        <div className="space-y-4">
-          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs space-y-3 text-xs">
-            <h3 className="font-bold uppercase tracking-wider text-gray-900">
-              Pricing formula
-            </h3>
-            <div className="p-3 bg-gray-50 rounded-lg border border-gray-100 font-mono text-[11px] text-gray-700 leading-relaxed">
-              Marketplace Price = ERP Price × (1 + Markup %)
-            </div>
-            <p className="text-[11px] text-gray-500 leading-relaxed">
-              When a product has an individual custom markup set in product details, it overrides both category and default marketplace markups.
+      {/* Top: Default Marketplace Markups */}
+      <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">
+              Default Marketplace Markups
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Applied automatically to all products unless an individual product override is defined
             </p>
           </div>
         </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {state.marketplaces.map((mp) => {
+            const s = summary[mp.id];
+
+            return (
+              <div
+                key={mp.id}
+                className="p-4 bg-gray-50/70 border border-gray-200 rounded-xl space-y-3"
+              >
+                <div className="flex items-center justify-between">
+                  <MarketplaceBadge marketplace={mp.id} />
+                  <span className="text-[10px] font-semibold text-gray-500 bg-white px-2 py-0.5 rounded border border-gray-100">
+                    {s?.price ?? 0} price mismatches
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    step="1"
+                    min="0"
+                    max="100"
+                    value={mp.defaultMarkupPct}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value) || 0;
+                      setMarketplaceMarkup(mp.id, val);
+                    }}
+                    className="w-20 px-3 py-1.5 text-sm font-mono font-bold bg-white border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-[#0D6D4E]"
+                  />
+                  <span className="text-sm font-semibold text-gray-500 font-mono">%</span>
+                </div>
+
+                <div className="text-[11px] text-gray-500">
+                  {MP_NAMES[mp.id]} expected prices update dynamically.
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Product-Specific Overrides Card */}
+      <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm space-y-6">
+        <div>
+          <h2 className="text-base font-semibold text-gray-900">
+            Product Markup Overrides ({state.markups.length})
+          </h2>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Individual products with custom markup percentages overriding the marketplace default
+          </p>
+        </div>
+
+        {/* Add Override Form */}
+        <form
+          onSubmit={handleAddOverride}
+          className="p-4 bg-emerald-50/50 border border-emerald-100 rounded-xl space-y-3"
+        >
+          <div className="text-xs font-semibold text-emerald-950 flex items-center gap-1.5">
+            <Plus className="w-4 h-4 text-emerald-700" />
+            <span>Add Custom Product Markup</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Product Search */}
+            <div className="relative sm:col-span-1">
+              <label className="text-[10px] uppercase font-bold text-gray-500 block mb-1">
+                Search Product
+              </label>
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Product name or barcode..."
+                  value={productSearch}
+                  onChange={(e) => {
+                    setProductSearch(e.target.value);
+                    setSelectedProductId('');
+                  }}
+                  className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-[#0D6D4E]"
+                />
+              </div>
+
+              {/* Autocomplete dropdown */}
+              {searchMatches.length > 0 && !selectedProductId && (
+                <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 max-h-48 overflow-y-auto divide-y divide-gray-100">
+                  {searchMatches.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedProductId(p.id);
+                        setProductSearch(p.nameEn);
+                      }}
+                      className="w-full px-3 py-2 text-left text-xs hover:bg-gray-50 flex items-center justify-between"
+                    >
+                      <span className="font-semibold text-gray-900 truncate">
+                        {p.nameEn}
+                      </span>
+                      <span className="font-mono text-gray-400 text-[11px] shrink-0">
+                        {p.erpPrice.toFixed(2)} QAR
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Marketplace Select */}
+            <div>
+              <label className="text-[10px] uppercase font-bold text-gray-500 block mb-1">
+                Marketplace
+              </label>
+              <select
+                value={selectedMp}
+                onChange={(e) => setSelectedMp(e.target.value as MarketplaceId)}
+                className="w-full px-3 py-1.5 text-xs bg-white border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-[#0D6D4E] font-medium text-gray-800"
+              >
+                {MARKETPLACE_IDS.map((mp) => (
+                  <option key={mp} value={mp}>
+                    {MP_NAMES[mp]}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Markup % and Submit */}
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <label className="text-[10px] uppercase font-bold text-gray-500 block mb-1">
+                  Markup %
+                </label>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    step="1"
+                    min="0"
+                    max="100"
+                    value={newMarkupPct}
+                    onChange={(e) => setNewMarkupPct(e.target.value)}
+                    className="w-full px-3 py-1.5 text-xs font-mono font-semibold bg-white border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-[#0D6D4E]"
+                  />
+                  <span className="text-xs text-gray-400 font-mono">%</span>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={!selectedProductId}
+                className={`px-4 py-1.5 text-xs font-semibold rounded-lg shadow-xs transition-colors shrink-0 ${
+                  selectedProductId
+                    ? 'bg-[#0D6D4E] hover:bg-[#0A583E] text-white cursor-pointer'
+                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        </form>
+
+        {/* Overrides Table */}
+        {state.markups.length === 0 ? (
+          <div className="p-8 text-center text-xs text-gray-500 border border-dashed border-gray-200 rounded-xl">
+            No product-level markup overrides configured. All products use marketplace defaults.
+          </div>
+        ) : (
+          <div className="border border-gray-200 rounded-xl overflow-hidden">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-[#F9FAFB] text-gray-500 uppercase font-semibold text-[10px] tracking-wider border-b border-gray-100">
+                <tr>
+                  <th className="px-5 py-3">Product</th>
+                  <th className="px-4 py-3">Marketplace</th>
+                  <th className="px-4 py-3 text-right">ERP Price</th>
+                  <th className="px-4 py-3 text-right">Custom Markup</th>
+                  <th className="px-4 py-3 text-right">Expected Price</th>
+                  <th className="px-4 py-3 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 font-medium text-gray-700">
+                {state.markups.map((m) => {
+                  const product = state.products.find((p) => p.id === m.productId);
+                  if (!product) return null;
+                  const exp = expectedPrice(product.erpPrice, m.markupPct);
+
+                  return (
+                    <tr
+                      key={`${m.productId}-${m.marketplaceId}`}
+                      className="hover:bg-gray-50 transition-colors"
+                    >
+                      <td className="px-5 py-3">
+                        <div className="font-semibold text-gray-900">
+                          {product.nameEn}
+                        </div>
+                        <div className="text-[10px] text-gray-400 font-mono">
+                          {product.barcode}
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <MarketplaceBadge marketplace={m.marketplaceId} />
+                      </td>
+
+                      <td className="px-4 py-3 text-right font-mono text-gray-900">
+                        {product.erpPrice.toFixed(2)} QAR
+                      </td>
+
+                      <td className="px-4 py-3 text-right">
+                        <span className="font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          {m.markupPct}%
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-3 text-right font-mono font-semibold text-gray-900">
+                        {exp.toFixed(2)} QAR
+                      </td>
+
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          onClick={() => handleRemoveOverride(m.productId, m.marketplaceId)}
+                          className="p-1 text-gray-400 hover:text-red-600 rounded transition-colors"
+                          title="Remove custom markup override"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

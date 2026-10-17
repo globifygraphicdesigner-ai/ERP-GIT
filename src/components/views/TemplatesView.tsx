@@ -1,142 +1,201 @@
-import React from 'react';
-import { FileSpreadsheet, Plus, Download, Edit3, MoreHorizontal } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { FileSpreadsheet, CheckCircle2, AlertCircle, ArrowLeft, Pencil, Plus, Database } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { MarketplaceBadge } from '../common/MarketplaceBadge';
+import { useDemo, ERP_FIELDS, MARKETPLACE_FIELDS } from '../../demo';
+import type { MarketplaceId, SourceId } from '../../demo';
+
+const MP_NAMES: Record<MarketplaceId, string> = {
+  talabat: 'Talabat',
+  snoonu: 'Snoonu',
+  rafeeq: 'Rafeeq',
+  keeta: 'Keeta',
+};
+
+const SOURCE_NAMES: Record<SourceId, string> = { erp: 'ERP', ...MP_NAMES };
 
 export const TemplatesView: React.FC = () => {
-  const { showToast } = useApp();
+  const { showToast, navigate } = useApp();
+  const { state, editMapping } = useDemo();
+  const [loading, setLoading] = useState<SourceId | null>(null);
 
-  const templates = [
-    {
-      id: 'tmpl-1',
-      name: 'Talabat Price & Stock Update',
-      marketplace: 'talabat' as const,
-      format: 'Excel (.xlsx)',
-      columns: 14,
-      lastModified: '06 Oct 2026',
-      status: 'Configured',
-    },
-    {
-      id: 'tmpl-2',
-      name: 'Snoonu Catalogue Sync Format',
-      marketplace: 'snoonu' as const,
-      format: 'Excel (.xlsx)',
-      columns: 18,
-      lastModified: '05 Oct 2026',
-      status: 'Configured',
-    },
-    {
-      id: 'tmpl-3',
-      name: 'Rafeeq Price Master Template',
-      marketplace: 'rafeeq' as const,
-      format: 'Excel (.xlsx)',
-      columns: 12,
-      lastModified: '04 Oct 2026',
-      status: 'Configured',
-    },
-    {
-      id: 'tmpl-4',
-      name: 'Rafeeq New Product Template',
-      marketplace: 'rafeeq' as const,
-      format: 'Excel (.xlsx)',
-      columns: 22,
-      lastModified: 'Pending setup',
-      status: 'Missing',
-    },
-    {
-      id: 'tmpl-5',
-      name: 'Keeta Fast Stock Push Format',
-      marketplace: 'keeta' as const,
-      format: 'CSV (.csv)',
-      columns: 8,
-      lastModified: '01 Oct 2026',
-      status: 'Configured',
-    },
-  ];
+  const enabledMps = useMemo(() => state.marketplaces.filter((m) => m.enabled), [state.marketplaces]);
+  const enabledMpIds = useMemo(() => new Set(enabledMps.map((m) => m.id)), [enabledMps]);
+
+  const sources: SourceId[] = useMemo(() => ['erp', ...enabledMps.map((m) => m.id)], [enabledMps]);
+
+  const handleEdit = async (src: SourceId) => {
+    setLoading(src);
+    const r = await editMapping(src);
+    setLoading(null);
+    if (r.next === 'mapping') navigate('column-mapping');
+    else if (r.next === 'error') showToast(r.message, 'warning');
+  };
+
+  const outputFormats = useMemo(
+    () => state.outputTemplates.filter((t) => enabledMpIds.has(t.marketplaceId)),
+    [state.outputTemplates, enabledMpIds]
+  );
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-6 animate-in fade-in duration-150">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">
-            Output Templates
-          </h1>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Manage file export formatting templates for Talabat, Snoonu, Rafeeq, and Keeta seller portals.
-          </p>
-        </div>
-
-        <button
-          onClick={() => showToast('Create new output template modal')}
-          className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0D6D4E] hover:bg-[#0b5c42] rounded-lg shadow-xs"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>New template</span>
-        </button>
+    <div className="p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-150">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight text-gray-900">
+          File mapping
+        </h1>
+        <p className="text-sm text-gray-500 mt-1">
+          How Qorloop reads the files you upload, and how it writes the files you send back to each marketplace
+        </p>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
+      {/* Section 1: Incoming files */}
+      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100">
+          <h2 className="text-base font-semibold text-gray-900">Incoming files: how Qorloop reads each file</h2>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Every source exports its file with different column names. This tells Qorloop which column is the barcode, the price, the stock, and so on.
+          </p>
+        </div>
+        <div className="divide-y divide-gray-100">
+          {sources.map((src) => {
+            const tpl = [...state.inputTemplates].reverse().find((t) => t.source === src);
+            const labels = src === 'erp' ? ERP_FIELDS : MARKETPLACE_FIELDS;
+            const mapped = tpl ? labels.filter((f) => tpl.fields[f.key]) : [];
+            return (
+              <div key={src} className="px-6 py-4 flex items-start gap-6 hover:bg-gray-50/60">
+                <div className="w-40 shrink-0 pt-0.5">
+                  {src === 'erp' ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-gray-900 text-white">
+                      <Database className="w-3.5 h-3.5" /> ERP export
+                    </span>
+                  ) : (
+                    <MarketplaceBadge marketplace={src} />
+                  )}
+                  <div className="mt-2">
+                    {tpl ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700">
+                        <CheckCircle2 className="w-3 h-3" /> Mapped · v{tpl.version}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700">
+                        <AlertCircle className="w-3 h-3" /> Not mapped yet
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  {tpl ? (
+                    <>
+                      <p className="text-xs text-gray-500 mb-2">{tpl.name}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {mapped.map((f) => (
+                          <span key={f.key} className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-50 border border-gray-200 rounded text-[11px]">
+                            <span className="font-semibold text-gray-800">{f.label}</span>
+                            <ArrowLeft className="w-3 h-3 text-gray-400" />
+                            <span className="font-mono text-gray-600">{tpl.fields[f.key]}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-xs text-gray-500">
+                      Qorloop hasn't seen a {SOURCE_NAMES[src]} file yet. Set up the mapping now, or upload the file and Qorloop will ask you then.
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() => handleEdit(src)}
+                  disabled={loading === src}
+                  className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors disabled:opacity-60 ${
+                    tpl
+                      ? 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                      : 'bg-[#0D6D4E] hover:bg-[#0A583E] text-white'
+                  }`}
+                >
+                  {tpl ? <Pencil className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                  {loading === src ? 'Opening…' : tpl ? 'View / edit mapping' : 'Set up mapping'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Section 2: Outgoing files */}
+      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">
+              Outgoing files: marketplace upload formats
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              The exact columns each marketplace's seller portal expects when Qorloop generates a corrected file (built in)
+            </p>
+          </div>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold">
+            <thead className="bg-[#F9FAFB] text-gray-500 uppercase font-semibold text-[10px] tracking-wider border-b border-gray-100">
               <tr>
-                <th className="py-2.5 px-4">Template name</th>
-                <th className="py-2.5 px-4">Marketplace</th>
-                <th className="py-2.5 px-4">File format</th>
-                <th className="py-2.5 px-4 text-center">Columns</th>
-                <th className="py-2.5 px-4">Last modified</th>
-                <th className="py-2.5 px-4 text-center">Status</th>
-                <th className="py-2.5 px-4 text-right">Actions</th>
+                <th className="px-6 py-3.5">Upload Format</th>
+                <th className="px-4 py-3.5">Marketplace</th>
+                <th className="px-4 py-3.5 text-center">Columns</th>
+                <th className="px-6 py-3.5">Output Columns</th>
+                <th className="px-4 py-3.5 text-center">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
-              {templates.map((t) => (
-                <tr key={t.id} className="hover:bg-gray-50">
-                  <td className="py-3 px-4 font-semibold text-gray-900">
-                    <div className="flex items-center gap-2">
-                      <FileSpreadsheet className="w-4 h-4 text-[#0D6D4E]" />
-                      <span>{t.name}</span>
+            <tbody className="divide-y divide-gray-100 text-gray-700 font-medium">
+              {outputFormats.map((t) => (
+                <tr key={t.marketplaceId} className="hover:bg-gray-50/70 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2.5">
+                      <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span className="font-semibold text-gray-900">{t.name}</span>
                     </div>
                   </td>
-                  <td className="py-3 px-4">
-                    <MarketplaceBadge marketplace={t.marketplace} />
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <MarketplaceBadge marketplace={t.marketplaceId} />
                   </td>
-                  <td className="py-3 px-4 text-gray-600">{t.format}</td>
-                  <td className="py-3 px-4 text-center font-mono text-gray-700">
-                    {t.columns}
+                  <td className="px-4 py-4 text-center font-mono text-gray-900 font-semibold">
+                    {t.columns.length}
                   </td>
-                  <td className="py-3 px-4 text-gray-500">{t.lastModified}</td>
-                  <td className="py-3 px-4 text-center">
-                    <span
-                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${
-                        t.status === 'Configured'
-                          ? 'bg-[#DEF7EC] text-[#03543F]'
-                          : 'bg-amber-100 text-amber-800'
-                      }`}
-                    >
-                      {t.status}
-                    </span>
+                  <td className="px-6 py-4">
+                    {t.columns.length > 0 ? (
+                      <div className="flex flex-wrap gap-1 max-w-md">
+                        {t.columns.slice(0, 4).map((col) => (
+                          <span
+                            key={col}
+                            className="px-1.5 py-0.5 bg-gray-100 text-gray-700 rounded text-[10px] font-mono"
+                          >
+                            {col}
+                          </span>
+                        ))}
+                        {t.columns.length > 4 && (
+                          <span className="px-1.5 py-0.5 text-gray-400 text-[10px]">
+                            +{t.columns.length - 4} more
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-gray-500 text-xs italic">
+                        Qorloop can compare {MP_NAMES[t.marketplaceId]} prices but can't create {MP_NAMES[t.marketplaceId]} update files yet.
+                      </span>
+                    )}
                   </td>
-                  <td className="py-3 px-4 text-right">
-                    <div className="inline-flex items-center gap-2">
-                      <button
-                        onClick={() => showToast(`Downloaded template ${t.name}`)}
-                        className="p-1 text-gray-400 hover:text-gray-700 rounded"
-                        title="Download sample"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => showToast(`Edit template ${t.name}`)}
-                        className="p-1 text-gray-400 hover:text-gray-700 rounded"
-                        title="Configure"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </button>
-                      <button className="p-1 text-gray-400 hover:text-gray-700 rounded">
-                        <MoreHorizontal className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                  <td className="px-4 py-4 text-center whitespace-nowrap">
+                    {t.configured ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <CheckCircle2 className="w-3 h-3" />
+                        Built in
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-600 border border-gray-200">
+                        <AlertCircle className="w-3 h-3" />
+                        Comparison only
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}

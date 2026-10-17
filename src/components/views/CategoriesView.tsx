@@ -7,13 +7,16 @@ import {
   Info,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useDemo } from '../../demo';
 
 export const CategoriesView: React.FC = () => {
-  const { categories, navigate, showToast } = useApp();
+  const { navigate, showToast } = useApp();
+  const { state } = useDemo();
+  const categories = state.categories;
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'All' | 'Active' | 'Inactive'>('All');
 
-  const filteredCategories = categories.filter((c) => {
+  const filteredCategories = categories.filter((c: any) => {
     if (statusFilter !== 'All' && c.status !== statusFilter) return false;
     if (
       searchTerm &&
@@ -110,7 +113,7 @@ export const CategoriesView: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filteredCategories.map((c) => (
+                {filteredCategories.map((c: any) => (
                   <tr
                     key={c.id}
                     onClick={() => navigate('category-detail', { categoryId: c.id })}

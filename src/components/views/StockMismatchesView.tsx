@@ -1,543 +1,359 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Download,
-  FileSpreadsheet,
   Search,
+  Filter,
+  AlertTriangle,
+  AlertCircle,
   MoreHorizontal,
   ChevronLeft,
   ChevronRight,
+  Info,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { ProductImage } from '../common/ProductImage';
-import { MarketplacePill } from '../common/MarketplaceBadge';
-import { MarketplaceId } from '../../types';
+import { MarketplaceBadge } from '../common/MarketplaceBadge';
+import {
+  useDemo,
+  stockMismatches,
+  relative,
+  MARKETPLACE_IDS,
+} from '../../demo';
+import type { MarketplaceId, ReconRow } from '../../demo';
+
+const MP_NAMES: Record<MarketplaceId, string> = {
+  talabat: 'Talabat',
+  snoonu: 'Snoonu',
+  rafeeq: 'Rafeeq',
+  keeta: 'Keeta',
+};
 
 export const StockMismatchesView: React.FC = () => {
-  const { navigate, showToast } = useApp();
+  const { navigate } = useApp();
+  const { state, summary } = useDemo();
+
   const [activeTab, setActiveTab] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [issueFilter, setIssueFilter] = useState<'all' | 'available_but_out_of_stock' | 'unavailable_but_in_stock'>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
 
-  const mismatchesData = [
-    {
-      id: '987654',
-      nameEn: 'Pepsi 330ml Can',
-      nameAr: 'بيبسي ٣٣٠ مل علبة',
-      imageKey: 'pepsi',
-      barcode: '6281007012345',
-      erpStock: 120,
-      marketplaceStock: 80,
-      diff: -40,
-      marketplace: 'talabat' as MarketplaceId,
-      updatedAt: '05 Oct 2026 18:40',
-    },
-    {
-      id: '987655',
-      nameEn: 'Baladna Fresh Milk 1L',
-      nameAr: 'حليب بلدنا الطازج ١ لتر',
-      imageKey: 'baladna',
-      barcode: '6291100231472',
-      erpStock: 45,
-      marketplaceStock: 0,
-      diff: -45,
-      marketplace: 'talabat' as MarketplaceId,
-      updatedAt: '05 Oct 2026 18:40',
-    },
-    {
-      id: '987656',
-      nameEn: "Lay's Salted 170g",
-      nameAr: 'ليز مملح ١٧٠ جم',
-      imageKey: 'lays',
-      barcode: '6281036112233',
-      erpStock: 60,
-      marketplaceStock: 20,
-      diff: -40,
-      marketplace: 'snoonu' as MarketplaceId,
-      updatedAt: '06 Oct 2026 08:55',
-    },
-    {
-      id: '987657',
-      nameEn: 'Almarai Laban 180ml',
-      nameAr: 'المراعي لبن ١٨٠ مل',
-      imageKey: 'almarai',
-      barcode: '6281007021118',
-      erpStock: 200,
-      marketplaceStock: 180,
-      diff: -20,
-      marketplace: 'rafeeq' as MarketplaceId,
-      updatedAt: '06 Oct 2026 07:30',
-    },
-    {
-      id: '987658',
-      nameEn: 'Snickers 50g',
-      nameAr: 'سنيكرز ٥٠ جم',
-      imageKey: 'snickers',
-      barcode: '5000159461122',
-      erpStock: 80,
-      marketplaceStock: 0,
-      diff: -80,
-      marketplace: 'talabat' as MarketplaceId,
-      updatedAt: '05 Oct 2026 18:40',
-    },
-    {
-      id: '987659',
-      nameEn: 'Al Ain Water 1.5L',
-      nameAr: 'مياه العين ١.٥ لتر',
-      imageKey: 'alain',
-      barcode: '6291003001234',
-      erpStock: 150,
-      marketplaceStock: 200,
-      diff: 50,
-      marketplace: 'snoonu' as MarketplaceId,
-      updatedAt: '06 Oct 2026 08:55',
-    },
-    {
-      id: '987660',
-      nameEn: 'Coca-Cola 1.5L',
-      nameAr: 'كوكاكولا ١.٥ لتر',
-      imageKey: 'coke',
-      barcode: '6289001234567',
-      erpStock: 90,
-      marketplaceStock: 60,
-      diff: -30,
-      marketplace: 'rafeeq' as MarketplaceId,
-      updatedAt: '06 Oct 2026 07:30',
-    },
-    {
-      id: '987661',
-      nameEn: 'Nescafe Classic 200g',
-      nameAr: 'نسكافيه كلاسيك ٢٠٠ جم',
-      imageKey: 'nescafe',
-      barcode: '6281234567890',
-      erpStock: 25,
-      marketplaceStock: 0,
-      diff: -25,
-      marketplace: 'talabat' as MarketplaceId,
-      updatedAt: '05 Oct 2026 18:40',
-    },
-    {
-      id: '987662',
-      nameEn: 'Maggi Chicken Stock 20g',
-      nameAr: 'ماجي مرقة دجاج ٢٠ جم',
-      imageKey: 'maggi',
-      barcode: '6281012345678',
-      erpStock: 300,
-      marketplaceStock: 320,
-      diff: 20,
-      marketplace: 'snoonu' as MarketplaceId,
-      updatedAt: '06 Oct 2026 08:55',
-    },
-    {
-      id: '987663',
-      nameEn: 'Pringles Original 165g',
-      nameAr: 'برينجلز الأصلي ١٦٥ جم',
-      imageKey: 'pringles',
-      barcode: '5053990154321',
-      erpStock: 70,
-      marketplaceStock: 50,
-      diff: -20,
-      marketplace: 'rafeeq' as MarketplaceId,
-      updatedAt: '06 Oct 2026 07:35',
-    },
-    {
-      id: '987664',
-      nameEn: 'KitKat 4 Finger 41.5g',
-      nameAr: 'كيت كات ٤ أصابع ٤١.٩ جم',
-      imageKey: 'kitkat',
-      barcode: '6291100998877',
-      erpStock: 180,
-      marketplaceStock: 100,
-      diff: -80,
-      marketplace: 'talabat' as MarketplaceId,
-      updatedAt: '05 Oct 2026 18:40',
-    },
-    {
-      id: '987665',
-      nameEn: 'Oreo Original 36.8g',
-      nameAr: 'أوريو الأصلي ٣٦.٨ جم',
-      imageKey: 'oreo',
-      barcode: '7622300441427',
-      erpStock: 400,
-      marketplaceStock: 380,
-      diff: -20,
-      marketplace: 'snoonu' as MarketplaceId,
-      updatedAt: '06 Oct 2026 08:55',
-    },
-    {
-      id: '987666',
-      nameEn: 'Lurpak Butter 200g',
-      nameAr: 'لورباك زبدة ٢٠٠ جم',
-      imageKey: 'lurpak',
-      barcode: '5711953012345',
-      erpStock: 35,
-      marketplaceStock: 0,
-      diff: -35,
-      marketplace: 'rafeeq' as MarketplaceId,
-      updatedAt: '06 Oct 2026 07:30',
-    },
-  ];
+  // Total counts across all marketplaces
+  const totalStockIssues = Object.values(summary).reduce((acc, s) => acc + s.stock, 0);
+  const totalPriceIssues = Object.values(summary).reduce((acc, s) => acc + s.price, 0);
 
-  const filtered = mismatchesData.filter((item) => {
-    if (activeTab !== 'all' && item.marketplace !== activeTab) return false;
-    if (
-      searchTerm &&
-      !item.nameEn.toLowerCase().includes(searchTerm.toLowerCase()) &&
-      !item.barcode.includes(searchTerm)
-    ) {
-      return false;
-    }
-    return true;
-  });
+  // Get raw mismatches
+  const rawRows = useMemo(() => {
+    const mpArg = activeTab === 'all' ? undefined : (activeTab as MarketplaceId);
+    const rows = stockMismatches(state, mpArg);
+
+    // Sort: available_but_out_of_stock FIRST (urgent: red), then unavailable_but_in_stock (amber)
+    return rows.sort((a, b) => {
+      if (a.stockIssue === 'available_but_out_of_stock' && b.stockIssue !== 'available_but_out_of_stock') {
+        return -1;
+      }
+      if (b.stockIssue === 'available_but_out_of_stock' && a.stockIssue !== 'available_but_out_of_stock') {
+        return 1;
+      }
+      return 0;
+    });
+  }, [state, activeTab]);
+
+  // Filtered rows
+  const filteredRows = useMemo(() => {
+    return rawRows.filter((r) => {
+      // Search
+      if (searchTerm) {
+        const q = searchTerm.toLowerCase();
+        const matches =
+          r.product.nameEn.toLowerCase().includes(q) ||
+          (r.product.nameAr && r.product.nameAr.includes(q)) ||
+          r.product.barcode.toLowerCase().includes(q) ||
+          r.product.id.toLowerCase().includes(q);
+        if (!matches) return false;
+      }
+
+      // Issue type
+      if (issueFilter !== 'all' && r.stockIssue !== issueFilter) {
+        return false;
+      }
+
+      // Category
+      if (categoryFilter !== 'all' && r.product.categoryId !== categoryFilter) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [rawRows, searchTerm, issueFilter, categoryFilter]);
+
+  const getErpStatus = (r: ReconRow) => {
+    if (!r.product.inLatestErpFile) return { label: 'Missing from ERP', color: 'text-gray-500 bg-gray-100' };
+    if (!r.product.erpActive) return { label: 'Inactive', color: 'text-gray-500 bg-gray-100' };
+    if (r.product.erpStock > 0) return { label: 'In stock', color: 'text-emerald-700 bg-emerald-50' };
+    return { label: 'Out of stock', color: 'text-red-700 bg-red-50' };
+  };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-6 animate-in fade-in duration-150">
-      {/* Breadcrumb & Header */}
-      <div>
-        <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-1">
-          <button
-            onClick={() => navigate('reports')}
-            className="hover:text-gray-800 text-blue-600 hover:underline"
-          >
-            Reports
-          </button>
-          <span>/</span>
-          <span className="text-gray-700">Stock report</span>
+    <div className="p-8 max-w-7xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Stock & Availability</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Compare ERP warehouse availability against marketplace listing status
+          </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-gray-900">
-              Stock mismatches
-            </h1>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Products where ERP and marketplace stock quantities do not match.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => showToast('Stock report exported to Excel')}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-xs"
-            >
-              <Download className="w-3.5 h-3.5 text-gray-500" />
-              <span>Export</span>
-            </button>
-
-            <button
-              onClick={() => navigate('outputs-generate')}
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0D6D4E] hover:bg-[#0b5c42] rounded-lg transition-colors shadow-xs"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5" />
-              <span>Generate stock file</span>
-            </button>
-          </div>
-        </div>
+        <button
+          onClick={() => navigate('outputs-generate')}
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#0D6D4E] hover:bg-[#0A583E] text-white text-sm font-semibold rounded-xl shadow-sm transition-colors"
+        >
+          <Download className="w-4 h-4" />
+          <span>Generate stock file</span>
+        </button>
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-6 border-b border-gray-200 text-xs">
+      {/* Primary Navigation Tabs */}
+      <div className="flex items-center gap-6 border-b border-gray-200">
+        <button className="pb-3 text-sm font-bold text-[#0D6D4E] border-b-2 border-[#0D6D4E] flex items-center gap-2">
+          <span>Stock issues</span>
+          <span className="px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-800 font-semibold">
+            {totalStockIssues}
+          </span>
+        </button>
+        <button
+          onClick={() => navigate('reports-price-discrepancies')}
+          className="pb-3 text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors flex items-center gap-2"
+        >
+          <span>Price discrepancies</span>
+          <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-700 font-semibold">
+            {totalPriceIssues}
+          </span>
+        </button>
+        <button
+          onClick={() => navigate('outputs-generate')}
+          className="pb-3 text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors flex items-center gap-2"
+        >
+          <span>Generated files</span>
+          <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-700 font-semibold">
+            {state.generatedFiles.length}
+          </span>
+        </button>
+      </div>
+
+      {/* Marketplace Selector Tabs */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1">
         <button
           onClick={() => setActiveTab('all')}
-          className={`pb-3 font-semibold border-b-2 transition-colors ${
+          className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center gap-2 ${
             activeTab === 'all'
-              ? 'border-[#0D6D4E] text-[#0D6D4E]'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
+              ? 'bg-gray-900 text-white'
+              : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
           }`}
         >
-          All (136)
+          <span>All Marketplaces</span>
+          <span
+            className={`px-1.5 py-0.2 rounded text-[10px] ${
+              activeTab === 'all' ? 'bg-gray-800 text-gray-200' : 'bg-gray-100 text-gray-600'
+            }`}
+          >
+            {totalStockIssues}
+          </span>
         </button>
-        <button
-          onClick={() => setActiveTab('talabat')}
-          className={`pb-3 font-semibold border-b-2 transition-colors ${
-            activeTab === 'talabat'
-              ? 'border-[#0D6D4E] text-[#0D6D4E]'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          Talabat (32)
-        </button>
-        <button
-          onClick={() => setActiveTab('snoonu')}
-          className={`pb-3 font-semibold border-b-2 transition-colors ${
-            activeTab === 'snoonu'
-              ? 'border-[#0D6D4E] text-[#0D6D4E]'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          Snoonu (27)
-        </button>
-        <button
-          onClick={() => setActiveTab('rafeeq')}
-          className={`pb-3 font-semibold border-b-2 transition-colors ${
-            activeTab === 'rafeeq'
-              ? 'border-[#0D6D4E] text-[#0D6D4E]'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          Rafeeq (40)
-        </button>
-        <button
-          onClick={() => setActiveTab('keeta')}
-          className={`pb-3 font-semibold border-b-2 transition-colors ${
-            activeTab === 'keeta'
-              ? 'border-[#0D6D4E] text-[#0D6D4E]'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          Keeta (0)
-        </button>
+
+        {state.marketplaces.filter((m) => m.enabled).map((m) => {
+          const mp = m.id;
+          const s = summary[mp];
+          const isSelected = activeTab === mp;
+
+          return (
+            <button
+              key={mp}
+              onClick={() => setActiveTab(mp)}
+              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center gap-2 ${
+                isSelected
+                  ? 'bg-gray-900 text-white'
+                  : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <span>{MP_NAMES[mp]}</span>
+              <span
+                className={`px-1.5 py-0.2 rounded text-[10px] ${
+                  isSelected ? 'bg-gray-800 text-gray-200' : 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                {s?.stock ?? 0}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Main Grid: Table (3 cols) + Filter Sidebar (1 col) */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
-        {/* Table Area */}
-        <div className="lg:col-span-3 bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
-          <div className="p-3.5 border-b border-gray-200 flex items-center justify-between gap-3">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search by product name or barcode..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-3 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0D6D4E]"
-              />
-            </div>
-
-            <select className="text-xs border border-gray-200 rounded-lg py-1.5 px-2 bg-white text-gray-700">
-              <option>Show 25 rows</option>
-              <option>Show 50 rows</option>
-            </select>
+      {/* Filter and Search Bar */}
+      <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[280px]">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search product name, barcode or SKU..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 text-xs border border-gray-200 rounded-xl focus:ring-1 focus:ring-[#0D6D4E] outline-none"
+            />
           </div>
 
+          <div className="flex items-center gap-2">
+            <select
+              value={issueFilter}
+              onChange={(e) => setIssueFilter(e.target.value as any)}
+              className="px-3 py-2 text-xs border border-gray-200 rounded-xl focus:ring-1 focus:ring-[#0D6D4E] outline-none bg-white text-gray-700 font-medium"
+            >
+              <option value="all">All issue types</option>
+              <option value="available_but_out_of_stock">Out of stock in ERP (Urgent)</option>
+              <option value="unavailable_but_in_stock">In stock in ERP (Lost sales)</option>
+            </select>
+
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="px-3 py-2 text-xs border border-gray-200 rounded-xl focus:ring-1 focus:ring-[#0D6D4E] outline-none bg-white text-gray-700 font-medium"
+            >
+              <option value="all">All categories</option>
+              {state.categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nameEn}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="text-xs text-gray-500 font-medium">
+          Showing <span className="font-semibold text-gray-900">{filteredRows.length}</span> issues
+        </div>
+      </div>
+
+      {/* Main Table */}
+      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+        {filteredRows.length === 0 ? (
+          <div className="p-12 text-center">
+            <Info className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+            <p className="text-sm font-semibold text-gray-900">No stock mismatches found</p>
+            <p className="text-xs text-gray-400 mt-1">
+              Stock availability between ERP and marketplaces is fully synchronized
+            </p>
+          </div>
+        ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold">
+              <thead className="bg-[#F9FAFB] text-gray-500 uppercase font-semibold text-[10px] tracking-wider border-b border-gray-100">
                 <tr>
-                  <th className="py-2.5 px-3 w-8">
-                    <input type="checkbox" className="rounded accent-[#0D6D4E]" />
-                  </th>
-                  <th className="py-2.5 px-3">Product</th>
-                  <th className="py-2.5 px-3">Barcode</th>
-                  <th className="py-2.5 px-3 text-right">ERP stock</th>
-                  <th className="py-2.5 px-3 text-right">Marketplace stock</th>
-                  <th className="py-2.5 px-3 text-right">Difference</th>
-                  <th className="py-2.5 px-3">Marketplace</th>
-                  <th className="py-2.5 px-3">Last updated</th>
-                  <th className="py-2.5 px-3 w-8"></th>
+                  <th className="px-5 py-3.5">Product</th>
+                  <th className="px-4 py-3.5">Barcode</th>
+                  <th className="px-4 py-3.5 text-right">ERP Stock</th>
+                  <th className="px-4 py-3.5 text-center">ERP Status</th>
+                  <th className="px-4 py-3.5 text-center">Marketplace Status</th>
+                  <th className="px-4 py-3.5">Issue</th>
+                  <th className="px-4 py-3.5 text-center">Marketplace</th>
+                  <th className="px-4 py-3.5">Last Updated</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
-                {filtered.map((item) => (
-                  <tr
-                    key={item.id + item.marketplace}
-                    onClick={() => navigate('product-detail', { productId: item.id })}
-                    className="hover:bg-gray-50/70 cursor-pointer group"
-                  >
-                    <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
-                      <input type="checkbox" className="rounded accent-[#0D6D4E]" />
-                    </td>
-                    <td className="py-3 px-3">
-                      <div className="flex items-center gap-3">
-                        <ProductImage imageKey={item.imageKey} size="sm" />
-                        <div>
-                          <div className="font-medium text-gray-900 group-hover:text-[#0D6D4E] transition-colors leading-tight">
-                            {item.nameEn}
-                          </div>
-                          <div className="text-[11px] text-gray-500 font-arabic leading-tight">
-                            {item.nameAr}
+              <tbody className="divide-y divide-gray-100 text-gray-600 font-medium">
+                {filteredRows.map((r) => {
+                  const erpStatus = getErpStatus(r);
+                  const isUrgent = r.stockIssue === 'available_but_out_of_stock';
+                  const mpName = MP_NAMES[r.marketplaceId];
+
+                  return (
+                    <tr
+                      key={`${r.product.id}-${r.marketplaceId}`}
+                      onClick={() => navigate('product-detail', { id: r.product.id })}
+                      className="hover:bg-gray-50/80 cursor-pointer transition-colors"
+                    >
+                      {/* Product */}
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <ProductImage
+                            imageKey={r.product.brand?.toLowerCase() || 'default'}
+                            className="w-9 h-9 rounded-lg border border-gray-100 p-0.5 object-contain shrink-0 bg-white"
+                          />
+                          <div>
+                            <div className="font-semibold text-gray-900 hover:text-[#0D6D4E] transition-colors">
+                              {r.product.nameEn}
+                            </div>
+                            {r.product.nameAr && (
+                              <div className="text-[11px] text-gray-400 mt-0.5" dir="rtl">
+                                {r.product.nameAr}
+                              </div>
+                            )}
                           </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="py-3 px-3 font-mono text-gray-600">
-                      {item.barcode}
-                    </td>
-                    <td className="py-3 px-3 text-right font-medium text-gray-800">
-                      {item.erpStock}
-                    </td>
-                    <td className="py-3 px-3 text-right font-medium text-gray-800">
-                      {item.marketplaceStock}
-                    </td>
-                    <td className="py-3 px-3 text-right font-bold">
-                      <span
-                        className={
-                          item.diff > 0 ? 'text-emerald-600' : 'text-red-600'
-                        }
-                      >
-                        {item.diff > 0 ? `+${item.diff}` : item.diff}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3">
-                      <MarketplacePill marketplace={item.marketplace} />
-                    </td>
-                    <td className="py-3 px-3 text-gray-500 whitespace-nowrap">
-                      {item.updatedAt}
-                    </td>
-                    <td className="py-3 px-3 text-right">
-                      <button className="text-gray-400 hover:text-gray-600 p-1">
-                        <MoreHorizontal className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+
+                      {/* Barcode */}
+                      <td className="px-4 py-3.5 font-mono text-[11px] text-gray-600 whitespace-nowrap">
+                        {r.product.barcode || '—'}
+                      </td>
+
+                      {/* ERP Stock Quantity */}
+                      <td className="px-4 py-3.5 text-right font-mono font-semibold text-gray-900 whitespace-nowrap">
+                        {r.product.erpStock.toLocaleString()}
+                      </td>
+
+                      {/* ERP Status */}
+                      <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${erpStatus.color}`}
+                        >
+                          {erpStatus.label}
+                        </span>
+                      </td>
+
+                      {/* Marketplace Status */}
+                      <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                            r.actualAvailable
+                              ? 'text-emerald-700 bg-emerald-50'
+                              : 'text-gray-600 bg-gray-100'
+                          }`}
+                        >
+                          {r.actualAvailable ? 'Available' : 'Unavailable'}
+                        </span>
+                      </td>
+
+                      {/* Issue Description */}
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        {isUrgent ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-red-50 text-red-700 border border-red-200">
+                            <AlertCircle className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                            <span>Available on {mpName}, out of stock in ERP</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            <span>Unavailable on {mpName}, in stock in ERP</span>
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Marketplace */}
+                      <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                        <MarketplaceBadge marketplace={r.marketplaceId} />
+                      </td>
+
+                      {/* Last Updated */}
+                      <td className="px-4 py-3.5 text-[11px] text-gray-500 whitespace-nowrap">
+                        {r.lastUpdated ? relative(r.lastUpdated, state.now) : '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-
-          <div className="p-3 border-t border-gray-200 flex items-center justify-between text-xs text-gray-500">
-            <span>Showing 1 to 13 of 136 stock mismatches</span>
-            <div className="flex items-center gap-1">
-              <button className="p-1 rounded hover:bg-gray-100 disabled:opacity-40">
-                <ChevronLeft className="w-3.5 h-3.5" />
-              </button>
-              <button className="px-2 py-1 rounded bg-[#E8F5EE] font-bold text-[#0D6D4E]">
-                1
-              </button>
-              <button className="px-2 py-1 rounded hover:bg-gray-100">2</button>
-              <button className="px-2 py-1 rounded hover:bg-gray-100">3</button>
-              <button className="px-2 py-1 rounded hover:bg-gray-100">4</button>
-              <button className="px-2 py-1 rounded hover:bg-gray-100">5</button>
-              <span className="px-1">...</span>
-              <button className="px-2 py-1 rounded hover:bg-gray-100">6</button>
-              <button className="p-1 rounded hover:bg-gray-100">
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Filter Sidebar */}
-        <div className="space-y-4">
-          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs space-y-4 text-xs">
-            <h3 className="font-bold uppercase tracking-wider text-gray-900 border-b border-gray-100 pb-2">
-              Filters
-            </h3>
-
-            {/* Marketplace */}
-            <div className="space-y-1.5">
-              <div className="font-semibold text-gray-900">Marketplace</div>
-              <label className="flex items-center justify-between text-gray-700 cursor-pointer">
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" defaultChecked className="rounded accent-[#0D6D4E]" />
-                  <span>Talabat</span>
-                </div>
-                <span className="text-gray-400 text-[11px]">32</span>
-              </label>
-              <label className="flex items-center justify-between text-gray-700 cursor-pointer">
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" className="rounded accent-[#0D6D4E]" />
-                  <span>Snoonu</span>
-                </div>
-                <span className="text-gray-400 text-[11px]">27</span>
-              </label>
-              <label className="flex items-center justify-between text-gray-700 cursor-pointer">
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" className="rounded accent-[#0D6D4E]" />
-                  <span>Rafeeq</span>
-                </div>
-                <span className="text-gray-400 text-[11px]">40</span>
-              </label>
-              <label className="flex items-center justify-between text-gray-700 cursor-pointer">
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" className="rounded accent-[#0D6D4E]" />
-                  <span>Keeta</span>
-                </div>
-                <span className="text-gray-400 text-[11px]">0</span>
-              </label>
-            </div>
-
-            {/* Stock status */}
-            <div className="space-y-1.5">
-              <div className="font-semibold text-gray-900">Stock status</div>
-              <label className="flex items-center justify-between text-gray-700 cursor-pointer">
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" defaultChecked className="rounded accent-[#0D6D4E]" />
-                  <span>Marketplace lower than ERP</span>
-                </div>
-                <span className="text-gray-400 text-[11px]">104</span>
-              </label>
-              <label className="flex items-center justify-between text-gray-700 cursor-pointer">
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" className="rounded accent-[#0D6D4E]" />
-                  <span>Marketplace higher than ERP</span>
-                </div>
-                <span className="text-gray-400 text-[11px]">32</span>
-              </label>
-            </div>
-
-            {/* Difference ranges */}
-            <div className="space-y-1.5">
-              <div className="font-semibold text-gray-900">Difference</div>
-              <label className="flex items-center justify-between text-gray-700 cursor-pointer">
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" className="rounded accent-[#0D6D4E]" />
-                  <span>More than 50</span>
-                </div>
-                <span className="text-gray-400 text-[11px]">28</span>
-              </label>
-              <label className="flex items-center justify-between text-gray-700 cursor-pointer">
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" className="rounded accent-[#0D6D4E]" />
-                  <span>21 to 50</span>
-                </div>
-                <span className="text-gray-400 text-[11px]">46</span>
-              </label>
-              <label className="flex items-center justify-between text-gray-700 cursor-pointer">
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" className="rounded accent-[#0D6D4E]" />
-                  <span>6 to 20</span>
-                </div>
-                <span className="text-gray-400 text-[11px]">38</span>
-              </label>
-              <label className="flex items-center justify-between text-gray-700 cursor-pointer">
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" className="rounded accent-[#0D6D4E]" />
-                  <span>1 to 5</span>
-                </div>
-                <span className="text-gray-400 text-[11px]">24</span>
-              </label>
-            </div>
-
-            {/* Category */}
-            <div className="space-y-1">
-              <div className="font-semibold text-gray-900">Category</div>
-              <select className="w-full border border-gray-200 rounded-lg p-2 text-xs bg-white text-gray-700">
-                <option>All categories</option>
-                <option>Soft Drinks</option>
-                <option>Dairy</option>
-                <option>Snacks</option>
-                <option>Confectionery</option>
-              </select>
-            </div>
-
-            {/* Brand */}
-            <div className="space-y-1">
-              <div className="font-semibold text-gray-900">Brand</div>
-              <select className="w-full border border-gray-200 rounded-lg p-2 text-xs bg-white text-gray-700">
-                <option>All brands</option>
-                <option>Pepsi</option>
-                <option>Baladna</option>
-                <option>Lay's</option>
-                <option>Almarai</option>
-              </select>
-            </div>
-
-            <div className="pt-2 space-y-2">
-              <button
-                onClick={() => showToast('Stock filters applied')}
-                className="w-full py-2 text-xs font-semibold text-white bg-[#0D6D4E] hover:bg-[#0b5c42] rounded-lg transition-colors shadow-xs"
-              >
-                Apply filters
-              </button>
-              <button
-                onClick={() => showToast('Stock filters reset')}
-                className="w-full text-center text-xs text-gray-600 hover:text-gray-900 hover:underline"
-              >
-                Clear filters
-              </button>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

@@ -7,27 +7,28 @@ import { UploadModal } from './components/modals/UploadModal';
 // Views
 import { DashboardView } from './components/views/DashboardView';
 import { UploadReviewView } from './components/views/UploadReviewView';
-import { CategoryMappingView } from './components/views/CategoryMappingView';
+import { ColumnMappingView } from './components/views/ColumnMappingView';
 import { CatalogueView } from './components/views/CatalogueView';
 import { ProductDetailView } from './components/views/ProductDetailView';
-import { AddProductView } from './components/views/AddProductView';
-import { CategoriesView } from './components/views/CategoriesView';
-import { CategoryDetailView } from './components/views/CategoryDetailView';
+import { NewProductsView } from './components/views/NewProductsView';
 import { StockMismatchesView } from './components/views/StockMismatchesView';
 import { PriceDiscrepanciesView } from './components/views/PriceDiscrepanciesView';
-import { PriceMismatchesView } from './components/views/PriceMismatchesView';
 import { GenerateFilesView } from './components/views/GenerateFilesView';
 import { OnboardingCompleteView } from './components/views/OnboardingCompleteView';
 import { MarkupsView } from './components/views/MarkupsView';
 import { TemplatesView } from './components/views/TemplatesView';
 import { SettingsView } from './components/views/SettingsView';
+import { UploadsHistoryView } from './components/views/UploadsHistoryView';
+import { CategoryMappingView } from './components/views/CategoryMappingView';
 import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
+import { useDemo } from './demo';
 
 const MainContent: React.FC = () => {
   const { currentView, toasts, dismissToast } = useApp();
+  const { state } = useDemo();
 
-  // Onboarding screen has its own fullscreen stepper layout matching the reference screenshot
-  if (currentView === 'onboarding') {
+  // First-run gate or explicit onboarding route: full-screen wizard
+  if (!state.onboarding?.completedAt || currentView === 'onboarding') {
     return (
       <>
         <OnboardingCompleteView />
@@ -41,31 +42,29 @@ const MainContent: React.FC = () => {
       case 'dashboard':
         return <DashboardView />;
       case 'uploads':
+        return <UploadsHistoryView />;
       case 'upload-review':
         return <UploadReviewView />;
-      case 'category-mapping':
-        return <CategoryMappingView />;
+      case 'column-mapping':
+        return <ColumnMappingView />;
       case 'catalogue':
         return <CatalogueView />;
       case 'product-detail':
         return <ProductDetailView />;
+      case 'new-products':
       case 'new-product':
-        return <AddProductView />;
-      case 'categories':
-        return <CategoriesView />;
-      case 'category-detail':
-        return <CategoryDetailView />;
+        return <NewProductsView />;
       case 'reports':
       case 'reports-stock':
         return <StockMismatchesView />;
       case 'reports-price-discrepancies':
         return <PriceDiscrepanciesView />;
-      case 'reports-price-mismatches':
-        return <PriceMismatchesView />;
       case 'outputs-generate':
         return <GenerateFilesView />;
       case 'markups':
         return <MarkupsView />;
+      case 'category-mapping':
+        return <CategoryMappingView />;
       case 'templates':
         return <TemplatesView />;
       case 'settings':

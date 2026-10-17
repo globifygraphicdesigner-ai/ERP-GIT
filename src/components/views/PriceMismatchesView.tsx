@@ -243,7 +243,7 @@ export const PriceMismatchesView: React.FC = () => {
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
-          All (214)
+          All
         </button>
         <button
           onClick={() => setActiveTab('talabat')}
@@ -385,7 +385,7 @@ export const PriceMismatchesView: React.FC = () => {
           </div>
 
           <div className="p-3 border-t border-gray-200 flex items-center justify-between text-xs text-gray-500">
-            <span>Showing 1 to 13 of 214 price mismatches</span>
+            <span>Showing price mismatches</span>
             <div className="flex items-center gap-1">
               <button className="p-1 rounded hover:bg-gray-100 disabled:opacity-40">
                 <ChevronLeft className="w-3.5 h-3.5" />

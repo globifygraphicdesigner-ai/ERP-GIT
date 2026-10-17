@@ -1,188 +1,120 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   CheckCircle2,
-  MoreHorizontal,
-  Info,
   Search,
-  Download,
-  AlertTriangle,
+  Info,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { ProductImage } from '../common/ProductImage';
+import { useDemo, money } from '../../demo';
 
 export const UploadReviewView: React.FC = () => {
   const { navigate, showToast } = useApp();
-  const [activeTab, setActiveTab] = useState<'price' | 'stock' | 'new' | 'missing'>('price');
+  const { pendingReview, confirmReview, discardReview, state } = useDemo();
+  const [activeTab, setActiveTab] = useState<'price' | 'stock' | 'availability' | 'new' | 'missing' | 'unmatched' | 'errors'>('price');
   const [searchTerm, setSearchTerm] = useState('');
 
-  const priceChangesData = [
-    {
-      barcode: '6281007012345',
-      nameEn: 'Pepsi 330ml Can',
-      nameAr: 'بيبسي ٣٣٠ مل علبة',
-      imageKey: 'pepsi',
-      oldPrice: '2.50',
-      newPrice: '2.75',
-      change: '+0.25',
-    },
-    {
-      barcode: '6291100231472',
-      nameEn: 'Baladna Fresh Milk 1L',
-      nameAr: 'حليب بلدنا الطازج ١ لتر',
-      imageKey: 'baladna',
-      oldPrice: '7.00',
-      newPrice: '7.25',
-      change: '+0.25',
-    },
-    {
-      barcode: '6281036112233',
-      nameEn: "Lay's Salted 170g",
-      nameAr: 'ليز مملح ١٧٠ جم',
-      imageKey: 'lays',
-      oldPrice: '8.50',
-      newPrice: '8.75',
-      change: '+0.25',
-    },
-    {
-      barcode: '6281007021118',
-      nameEn: 'Almarai Laban 180ml',
-      nameAr: 'المراعي لبن ١٨٠ مل',
-      imageKey: 'almarai',
-      oldPrice: '1.75',
-      newPrice: '1.95',
-      change: '+0.20',
-    },
-    {
-      barcode: '5000159461122',
-      nameEn: 'Snickers 50g',
-      nameAr: 'سنيكرز ٥٠ جم',
-      imageKey: 'snickers',
-      oldPrice: '3.25',
-      newPrice: '3.50',
-      change: '+0.25',
-    },
-    {
-      barcode: '6291003001234',
-      nameEn: 'Al Ain Water 1.5L',
-      nameAr: 'مياه العين ١.٥ لتر',
-      imageKey: 'alain',
-      oldPrice: '2.00',
-      newPrice: '2.25',
-      change: '+0.25',
-    },
-    {
-      barcode: '6289001234567',
-      nameEn: 'Coca-Cola 1.5L',
-      nameAr: 'كوكاكولا ١.٥ لتر',
-      imageKey: 'coke',
-      oldPrice: '5.00',
-      newPrice: '5.25',
-      change: '+0.25',
-    },
-    {
-      barcode: '6281234567890',
-      nameEn: 'Nescafe Classic 200g',
-      nameAr: 'نسكافيه كلاسيك ٢٠٠ جم',
-      imageKey: 'nescafe',
-      oldPrice: '18.00',
-      newPrice: '18.50',
-      change: '+0.50',
-    },
-  ];
+  if (!pendingReview) {
+    return (
+      <div className="p-8 max-w-7xl mx-auto animate-in fade-in duration-150">
+        <p className="text-sm text-gray-500">No upload to review. Go to the <button onClick={() => navigate('dashboard')} className="text-[#0D6D4E] hover:underline font-medium">dashboard</button> and upload a file.</p>
+      </div>
+    );
+  }
 
-  const filteredChanges = priceChangesData.filter((item) =>
-    item.nameEn.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.barcode.includes(searchTerm)
-  );
+  const { upload, summary: reviewSummary } = pendingReview;
+  const isErp = upload.source === 'erp';
+  const sourceName = upload.source === 'erp' ? `ERP (${state.tenant.erpName})` : state.marketplaces.find((m) => m.id === upload.source)?.name || upload.source;
 
-  const handleConfirmAndApply = () => {
-    showToast('214 price changes and 1,932 stock changes applied to catalogue successfully!');
-    navigate('catalogue');
+  // Template detection info
+  const template = upload.templateId ? state.inputTemplates.find((t) => t.id === upload.templateId) : null;
+
+  const handleConfirm = () => {
+    const msg = [];
+    if (reviewSummary.priceChanges) msg.push(`${reviewSummary.priceChanges} price change${reviewSummary.priceChanges > 1 ? 's' : ''}`);
+    if (reviewSummary.stockChanges) msg.push(`${reviewSummary.stockChanges} stock change${reviewSummary.stockChanges > 1 ? 's' : ''}`);
+    confirmReview();
+    showToast(`Applied: ${msg.join(', ') || 'no changes'}`);
+    navigate('dashboard');
   };
+
+  const handleCancel = () => {
+    discardReview();
+    navigate('dashboard');
+  };
+
+  // Filtered data based on search
+  const filterBySearch = <T extends { nameEn?: string; barcode?: string }>(items: T[]): T[] => {
+    if (!searchTerm) return items;
+    const q = searchTerm.toLowerCase();
+    return items.filter((item) =>
+      (item.nameEn?.toLowerCase().includes(q)) || (item.barcode?.includes(q))
+    );
+  };
+
+  // Determine available tabs
+  const tabs: { key: typeof activeTab; label: string; count: number }[] = [];
+  tabs.push({ key: 'price', label: 'Price changes', count: reviewSummary.priceChanges });
+  if (isErp) {
+    tabs.push({ key: 'stock', label: 'Stock changes', count: reviewSummary.stockChanges });
+  } else {
+    tabs.push({ key: 'availability', label: 'Availability changes', count: pendingReview.availabilityChanges.length });
+  }
+  if (isErp) tabs.push({ key: 'new', label: 'New products', count: reviewSummary.newProducts });
+  tabs.push({ key: 'missing', label: 'Missing', count: reviewSummary.missingFromFile });
+  if (!isErp && pendingReview.unmatched.length > 0) {
+    tabs.push({ key: 'unmatched', label: 'Unmatched rows', count: pendingReview.unmatched.length });
+  }
+  if (pendingReview.errors.length > 0) {
+    tabs.push({ key: 'errors', label: 'Errors', count: pendingReview.errors.length });
+  }
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6 animate-in fade-in duration-150">
       {/* Breadcrumbs & Header */}
       <div>
         <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-1">
-          <button
-            onClick={() => navigate('uploads')}
-            className="hover:text-gray-800 text-blue-600 hover:underline"
-          >
+          <button onClick={() => navigate('uploads')} className="hover:text-gray-800 text-blue-600 hover:underline">
             Uploads
           </button>
           <span>/</span>
-          <span className="text-gray-700">Item_Master_06Oct2026.xlsx</span>
+          <span className="text-gray-700">{upload.fileName}</span>
         </div>
 
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold tracking-tight text-gray-900">
-              Item_Master_06Oct2026.xlsx
+              {upload.fileName}
             </h1>
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">
               Needs review
             </span>
           </div>
-
-          <button className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
-            <MoreHorizontal className="w-5 h-5" />
-          </button>
         </div>
 
         <p className="text-xs text-gray-500 mt-1">
-          ERP (RetailOne) &nbsp;•&nbsp; Full list &nbsp;•&nbsp; Uploaded by Omar Haddad today 09:10
+          {sourceName} &nbsp;•&nbsp; {upload.contains === 'full' ? 'Full list' : 'Partial update'} &nbsp;•&nbsp; Uploaded by {state.currentUser.name}
         </p>
       </div>
 
       {/* Stepper Progress Bar */}
       <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
         <div className="grid grid-cols-6 gap-2">
-          {/* Step 1: Scan */}
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-[#0D6D4E] text-white flex items-center justify-center shrink-0">
-              <CheckCircle2 className="w-4 h-4" />
+          {[
+            { label: 'Scan', detail: 'File is safe' },
+            { label: 'Check', detail: 'No issues found' },
+            { label: 'Detect', detail: template ? `Layout: ${template.name}` : 'Layout recognised' },
+            { label: 'Read', detail: `${reviewSummary.rowsRead.toLocaleString()} rows read` },
+          ].map((step, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-full bg-[#0D6D4E] text-white flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-gray-900">{step.label}</div>
+                <div className="text-[10px] text-gray-500">{step.detail}</div>
+              </div>
             </div>
-            <div>
-              <div className="text-xs font-bold text-gray-900">Scan</div>
-              <div className="text-[10px] text-gray-500">File is safe</div>
-            </div>
-          </div>
-
-          {/* Step 2: Check */}
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-[#0D6D4E] text-white flex items-center justify-center shrink-0">
-              <CheckCircle2 className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="text-xs font-bold text-gray-900">Check</div>
-              <div className="text-[10px] text-gray-500">No issues found</div>
-            </div>
-          </div>
-
-          {/* Step 3: Detect */}
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-[#0D6D4E] text-white flex items-center justify-center shrink-0">
-              <CheckCircle2 className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="text-xs font-bold text-gray-900">Detect</div>
-              <div className="text-[10px] text-gray-500">Layout recognised</div>
-            </div>
-          </div>
-
-          {/* Step 4: Read */}
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-[#0D6D4E] text-white flex items-center justify-center shrink-0">
-              <CheckCircle2 className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="text-xs font-bold text-gray-900">Read</div>
-              <div className="text-[10px] text-gray-500">12,829 rows read</div>
-            </div>
-          </div>
-
-          {/* Step 5: Review */}
+          ))}
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded-full bg-[#0D6D4E] text-white flex items-center justify-center text-xs font-bold shrink-0">
               5
@@ -192,8 +124,6 @@ export const UploadReviewView: React.FC = () => {
               <div className="text-[10px] text-gray-500">Confirm changes</div>
             </div>
           </div>
-
-          {/* Step 6: Apply */}
           <div className="flex items-center gap-2 opacity-60">
             <div className="w-6 h-6 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center text-xs font-semibold shrink-0">
               6
@@ -206,14 +136,16 @@ export const UploadReviewView: React.FC = () => {
         </div>
       </div>
 
-      {/* Info Notice Banner */}
-      <div className="flex items-center gap-2.5 p-3 rounded-lg bg-blue-50/70 text-blue-900 border border-blue-100 text-xs">
-        <Info className="w-4 h-4 shrink-0 text-blue-600" />
-        <span>
-          <strong>Category, Arabic name, image and markups in this file are ignored.</strong>{' '}
-          Shelf keeps the values you manage here.
-        </span>
-      </div>
+      {/* Info Notice Banner (ERP only) */}
+      {isErp && (
+        <div className="flex items-center gap-2.5 p-3 rounded-lg bg-blue-50/70 text-blue-900 border border-blue-100 text-xs">
+          <Info className="w-4 h-4 shrink-0 text-blue-600" />
+          <span>
+            <strong>Category, Arabic name, image and markups in this file are ignored.</strong>{' '}
+            Qorloop keeps the values you manage here.
+          </span>
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div className="space-y-2">
@@ -221,91 +153,40 @@ export const UploadReviewView: React.FC = () => {
           Summary
         </h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-          <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-xs">
-            <div className="text-[11px] text-gray-500">Rows read</div>
-            <div className="text-xl font-bold text-gray-900 mt-1">12,829</div>
-          </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-xs">
-            <div className="text-[11px] text-gray-500">Matched to catalogue</div>
-            <div className="text-xl font-bold text-[#0D6D4E] mt-1">12,786</div>
-          </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-xs">
-            <div className="text-[11px] text-gray-500">New products</div>
-            <div className="text-xl font-bold text-blue-600 mt-1">18</div>
-          </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-xs">
-            <div className="text-[11px] text-gray-500">Rows with errors</div>
-            <div className="text-xl font-bold text-red-600 mt-1">25</div>
-            <button className="text-[10px] text-red-600 underline font-medium mt-0.5">
-              View errors
-            </button>
-          </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-xs">
-            <div className="text-[11px] text-gray-500">Price changes</div>
-            <div className="text-xl font-bold text-blue-600 mt-1">214</div>
-          </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-xs">
-            <div className="text-[11px] text-gray-500">Stock changes</div>
-            <div className="text-xl font-bold text-blue-600 mt-1">1,932</div>
-          </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-xs">
-            <div className="text-[11px] text-gray-500">Missing from file</div>
-            <div className="text-xl font-bold text-amber-600 mt-1">9</div>
-          </div>
+          <SummaryCard label="Rows read" value={reviewSummary.rowsRead} />
+          <SummaryCard label="Matched to catalogue" value={reviewSummary.matched} color="text-[#0D6D4E]" />
+          <SummaryCard label="New products" value={reviewSummary.newProducts} color="text-blue-600" />
+          <SummaryCard label="Rows with errors" value={reviewSummary.rowsWithErrors} color={reviewSummary.rowsWithErrors > 0 ? 'text-red-600' : undefined} />
+          <SummaryCard label="Price changes" value={reviewSummary.priceChanges} color="text-blue-600" />
+          <SummaryCard label={isErp ? 'Stock changes' : 'Availability changes'} value={reviewSummary.stockChanges} color="text-blue-600" />
+          <SummaryCard label="Missing from file" value={reviewSummary.missingFromFile} color={reviewSummary.missingFromFile > 0 ? 'text-amber-600' : undefined} />
         </div>
       </div>
 
-      {/* Main Grid: Left Review Table, Right Details Sidebar */}
+      {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        {/* Left 2 Cols: Table & Tabs */}
+        {/* Left: Table & Tabs */}
         <div className="lg:col-span-2 bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
           {/* Tabs */}
-          <div className="flex items-center border-b border-gray-200 px-4">
-            <button
-              onClick={() => setActiveTab('price')}
-              className={`py-3 px-3 text-xs font-semibold border-b-2 transition-colors ${
-                activeTab === 'price'
-                  ? 'border-[#0D6D4E] text-[#0D6D4E]'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Price changes (214)
-            </button>
-            <button
-              onClick={() => setActiveTab('stock')}
-              className={`py-3 px-3 text-xs font-semibold border-b-2 transition-colors ${
-                activeTab === 'stock'
-                  ? 'border-[#0D6D4E] text-[#0D6D4E]'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Stock changes (1,932)
-            </button>
-            <button
-              onClick={() => setActiveTab('new')}
-              className={`py-3 px-3 text-xs font-semibold border-b-2 transition-colors ${
-                activeTab === 'new'
-                  ? 'border-[#0D6D4E] text-[#0D6D4E]'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              New products (18)
-            </button>
-            <button
-              onClick={() => setActiveTab('missing')}
-              className={`py-3 px-3 text-xs font-semibold border-b-2 transition-colors ${
-                activeTab === 'missing'
-                  ? 'border-[#0D6D4E] text-[#0D6D4E]'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Missing (9)
-            </button>
+          <div className="flex items-center border-b border-gray-200 px-4 overflow-x-auto">
+            {tabs.map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`py-3 px-3 text-xs font-semibold border-b-2 transition-colors whitespace-nowrap ${
+                  activeTab === tab.key
+                    ? 'border-[#0D6D4E] text-[#0D6D4E]'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {tab.label} ({tab.count})
+              </button>
+            ))}
           </div>
 
-          {/* Search bar & Actions */}
-          <div className="p-3.5 border-b border-gray-100 flex items-center justify-between gap-3">
-            <div className="relative flex-1 max-w-sm">
+          {/* Search bar */}
+          <div className="p-3.5 border-b border-gray-100">
+            <div className="relative max-w-sm">
               <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-gray-400" />
               <input
                 type="text"
@@ -315,198 +196,251 @@ export const UploadReviewView: React.FC = () => {
                 className="w-full pl-9 pr-3 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0D6D4E]"
               />
             </div>
-
-            <button
-              onClick={() => showToast('Exported review list to CSV')}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 shadow-xs"
-            >
-              <Download className="w-3.5 h-3.5 text-gray-500" />
-              <span>Export list</span>
-            </button>
           </div>
 
-          {/* Table */}
+          {/* Table content */}
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold">
-                <tr>
-                  <th className="py-2.5 px-3 w-8">
-                    <input type="checkbox" className="rounded accent-[#0D6D4E]" />
-                  </th>
-                  <th className="py-2.5 px-3 font-semibold">Barcode</th>
-                  <th className="py-2.5 px-3 font-semibold">Product</th>
-                  <th className="py-2.5 px-3 font-semibold text-right">Old price (QAR)</th>
-                  <th className="py-2.5 px-3 font-semibold text-right">New price (QAR)</th>
-                  <th className="py-2.5 px-3 font-semibold text-right">Change</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {filteredChanges.map((item) => (
-                  <tr key={item.barcode} className="hover:bg-gray-50/70 transition-colors">
-                    <td className="py-3 px-3">
-                      <input type="checkbox" className="rounded accent-[#0D6D4E]" />
-                    </td>
-                    <td className="py-3 px-3 font-mono text-gray-600">
-                      {item.barcode}
-                    </td>
-                    <td className="py-3 px-3">
-                      <div className="flex items-center gap-2.5">
-                        <ProductImage imageKey={item.imageKey} size="sm" />
-                        <div>
-                          <div className="font-medium text-gray-900 leading-tight">
-                            {item.nameEn}
-                          </div>
-                          <div className="text-[11px] text-gray-500 font-arabic leading-tight">
-                            {item.nameAr}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-3 px-3 text-right text-gray-600 font-medium">
-                      {item.oldPrice}
-                    </td>
-                    <td className="py-3 px-3 text-right font-semibold text-gray-900">
-                      {item.newPrice}
-                    </td>
-                    <td className="py-3 px-3 text-right font-semibold text-[#0D6D4E]">
-                      {item.change}
-                    </td>
+            {activeTab === 'price' && (
+              <table className="w-full text-left text-xs">
+                <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold">
+                  <tr>
+                    <th className="py-2.5 px-3">Barcode</th>
+                    <th className="py-2.5 px-3">Product</th>
+                    <th className="py-2.5 px-3 text-right">Old price (QAR)</th>
+                    <th className="py-2.5 px-3 text-right">New price (QAR)</th>
+                    <th className="py-2.5 px-3 text-right">Change</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filterBySearch(pendingReview.priceChanges).map((item) => (
+                    <tr key={item.productId} className="hover:bg-gray-50/70">
+                      <td className="py-3 px-3 font-mono text-gray-600">{item.barcode}</td>
+                      <td className="py-3 px-3">
+                        <div className="font-medium text-gray-900">{item.nameEn}</div>
+                        {item.nameAr && <div className="text-[11px] text-gray-500">{item.nameAr}</div>}
+                      </td>
+                      <td className="py-3 px-3 text-right text-gray-600">{money(item.oldValue)}</td>
+                      <td className="py-3 px-3 text-right font-semibold text-gray-900">{money(item.newValue)}</td>
+                      <td className="py-3 px-3 text-right font-semibold text-gray-700">
+                        {(item.newValue - item.oldValue) > 0 ? '+' : ''}{money(item.newValue - item.oldValue)}
+                      </td>
+                    </tr>
+                  ))}
+                  {filterBySearch(pendingReview.priceChanges).length === 0 && (
+                    <tr><td colSpan={5} className="py-8 text-center text-gray-400">No price changes</td></tr>
+                  )}
+                </tbody>
+              </table>
+            )}
+
+            {activeTab === 'stock' && (
+              <table className="w-full text-left text-xs">
+                <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold">
+                  <tr>
+                    <th className="py-2.5 px-3">Barcode</th>
+                    <th className="py-2.5 px-3">Product</th>
+                    <th className="py-2.5 px-3 text-right">Old stock</th>
+                    <th className="py-2.5 px-3 text-right">New stock</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filterBySearch(pendingReview.stockChanges).map((item) => (
+                    <tr key={item.productId} className="hover:bg-gray-50/70">
+                      <td className="py-3 px-3 font-mono text-gray-600">{item.barcode}</td>
+                      <td className="py-3 px-3">
+                        <div className="font-medium text-gray-900">{item.nameEn}</div>
+                        {item.nameAr && <div className="text-[11px] text-gray-500">{item.nameAr}</div>}
+                      </td>
+                      <td className="py-3 px-3 text-right text-gray-600">{item.oldValue}</td>
+                      <td className="py-3 px-3 text-right font-semibold text-gray-900">{item.newValue}</td>
+                    </tr>
+                  ))}
+                  {filterBySearch(pendingReview.stockChanges).length === 0 && (
+                    <tr><td colSpan={4} className="py-8 text-center text-gray-400">No stock changes</td></tr>
+                  )}
+                </tbody>
+              </table>
+            )}
+
+            {activeTab === 'availability' && (
+              <table className="w-full text-left text-xs">
+                <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold">
+                  <tr>
+                    <th className="py-2.5 px-3">Barcode</th>
+                    <th className="py-2.5 px-3">Product</th>
+                    <th className="py-2.5 px-3">Old availability</th>
+                    <th className="py-2.5 px-3">New availability</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {pendingReview.availabilityChanges.map((item) => (
+                    <tr key={item.productId} className="hover:bg-gray-50/70">
+                      <td className="py-3 px-3 font-mono text-gray-600">{item.barcode}</td>
+                      <td className="py-3 px-3">
+                        <div className="font-medium text-gray-900">{item.nameEn}</div>
+                      </td>
+                      <td className="py-3 px-3">{item.oldValue === null ? '—' : item.oldValue ? 'Available' : 'Unavailable'}</td>
+                      <td className="py-3 px-3 font-semibold">{item.newValue ? 'Available' : 'Unavailable'}</td>
+                    </tr>
+                  ))}
+                  {pendingReview.availabilityChanges.length === 0 && (
+                    <tr><td colSpan={4} className="py-8 text-center text-gray-400">No availability changes</td></tr>
+                  )}
+                </tbody>
+              </table>
+            )}
+
+            {activeTab === 'new' && (
+              <table className="w-full text-left text-xs">
+                <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold">
+                  <tr>
+                    <th className="py-2.5 px-3">Barcode</th>
+                    <th className="py-2.5 px-3">Product</th>
+                    <th className="py-2.5 px-3 text-right">Price (QAR)</th>
+                    <th className="py-2.5 px-3 text-right">Stock</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {pendingReview.newProducts.map((item, i) => (
+                    <tr key={i} className="hover:bg-gray-50/70">
+                      <td className="py-3 px-3 font-mono text-gray-600">{item.barcode}</td>
+                      <td className="py-3 px-3 font-medium text-gray-900">{item.nameEn}</td>
+                      <td className="py-3 px-3 text-right text-gray-700">{money(item.price)}</td>
+                      <td className="py-3 px-3 text-right text-gray-700">{item.stock}</td>
+                    </tr>
+                  ))}
+                  {pendingReview.newProducts.length === 0 && (
+                    <tr><td colSpan={4} className="py-8 text-center text-gray-400">No new products</td></tr>
+                  )}
+                </tbody>
+              </table>
+            )}
+
+            {activeTab === 'missing' && (
+              <table className="w-full text-left text-xs">
+                <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold">
+                  <tr>
+                    <th className="py-2.5 px-3">Barcode</th>
+                    <th className="py-2.5 px-3">Product</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {pendingReview.missing.map((item) => (
+                    <tr key={item.productId} className="hover:bg-gray-50/70">
+                      <td className="py-3 px-3 font-mono text-gray-600">{item.barcode}</td>
+                      <td className="py-3 px-3 font-medium text-gray-900">{item.nameEn}</td>
+                    </tr>
+                  ))}
+                  {pendingReview.missing.length === 0 && (
+                    <tr><td colSpan={2} className="py-8 text-center text-gray-400">No missing products</td></tr>
+                  )}
+                </tbody>
+              </table>
+            )}
+
+            {activeTab === 'unmatched' && (
+              <>
+                <div className="px-4 py-2 bg-amber-50/50 text-xs text-amber-800 border-b border-amber-100">
+                  These rows are on {sourceName} but not in your catalogue.
+                </div>
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold">
+                    <tr>
+                      <th className="py-2.5 px-3">ID</th>
+                      <th className="py-2.5 px-3">Name</th>
+                      <th className="py-2.5 px-3 text-right">Price</th>
+                      <th className="py-2.5 px-3">Available</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {pendingReview.unmatched.map((item, i) => (
+                      <tr key={i} className="hover:bg-gray-50/70">
+                        <td className="py-3 px-3 font-mono text-gray-600">{item.marketplaceProductId}</td>
+                        <td className="py-3 px-3 font-medium text-gray-900">{item.name}</td>
+                        <td className="py-3 px-3 text-right text-gray-700">{money(item.price)}</td>
+                        <td className="py-3 px-3">{item.available ? 'Yes' : 'No'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
+
+            {activeTab === 'errors' && (
+              <table className="w-full text-left text-xs">
+                <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold">
+                  <tr>
+                    <th className="py-2.5 px-3">Row</th>
+                    <th className="py-2.5 px-3">Column</th>
+                    <th className="py-2.5 px-3">Value</th>
+                    <th className="py-2.5 px-3">Reason</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {pendingReview.errors.map((err, i) => (
+                    <tr key={i} className="hover:bg-gray-50/70">
+                      <td className="py-3 px-3 text-gray-600">{err.row}</td>
+                      <td className="py-3 px-3 font-medium text-gray-900">{err.column}</td>
+                      <td className="py-3 px-3 font-mono text-gray-600">{err.value}</td>
+                      <td className="py-3 px-3 text-red-600">{err.reason}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
 
-          {/* Pagination Footer */}
-          <div className="p-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
-            <span>Showing 1 to 8 of 214 price changes</span>
-            <div className="flex items-center gap-1">
-              <button className="px-2 py-1 rounded bg-gray-100 font-semibold text-[#0D6D4E]">
-                1
-              </button>
-              <button className="px-2 py-1 rounded hover:bg-gray-100">2</button>
-              <button className="px-2 py-1 rounded hover:bg-gray-100">3</button>
-              <button className="px-2 py-1 rounded hover:bg-gray-100">4</button>
-              <button className="px-2 py-1 rounded hover:bg-gray-100">5</button>
-              <span className="px-1">...</span>
-              <button className="px-2 py-1 rounded hover:bg-gray-100">27</button>
-            </div>
+          {/* Footer */}
+          <div className="p-3 border-t border-gray-100 text-xs text-gray-500">
+            {activeTab === 'price' && `${pendingReview.priceChanges.length} price changes`}
+            {activeTab === 'stock' && `${pendingReview.stockChanges.length} stock changes`}
+            {activeTab === 'availability' && `${pendingReview.availabilityChanges.length} availability changes`}
+            {activeTab === 'new' && `${pendingReview.newProducts.length} new products`}
+            {activeTab === 'missing' && `${pendingReview.missing.length} missing products`}
+            {activeTab === 'unmatched' && `${pendingReview.unmatched.length} unmatched rows`}
+            {activeTab === 'errors' && `${pendingReview.errors.length} errors`}
           </div>
         </div>
 
-        {/* Right Sidebar: File Details, Safety checks, Actions */}
+        {/* Right Sidebar */}
         <div className="space-y-4">
           {/* File Details Card */}
           <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs space-y-3">
             <h3 className="text-xs font-bold uppercase tracking-wider text-gray-900">
               File details
             </h3>
-
-            <div className="flex items-center gap-2.5 pb-2 border-b border-gray-100">
-              <div className="w-8 h-8 rounded bg-emerald-600 text-white font-bold flex items-center justify-center text-xs">
-                X
-              </div>
-              <div>
-                <div className="text-xs font-semibold text-gray-900">
-                  Item_Master_06Oct2026.xlsx
-                </div>
-                <div className="text-[10px] text-gray-500">1.4 MB</div>
-              </div>
-            </div>
-
             <div className="space-y-1.5 text-xs">
-              <div className="flex justify-between py-1 border-b border-gray-50">
-                <span className="text-gray-500">Source</span>
-                <span className="font-medium text-gray-900">ERP (RetailOne)</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-gray-50">
-                <span className="text-gray-500">File type</span>
-                <span className="font-medium text-gray-900">Excel (.xlsx)</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-gray-50">
-                <span className="text-gray-500">Uploaded by</span>
-                <span className="font-medium text-gray-900">Omar Haddad</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-gray-50">
-                <span className="text-gray-500">Uploaded at</span>
-                <span className="font-medium text-gray-900">06 Oct 2026 09:10</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-gray-50">
-                <span className="text-gray-500">Contains</span>
-                <span className="font-medium text-gray-900">All products (full list)</span>
-              </div>
-              <div className="flex justify-between py-1">
-                <span className="text-gray-500">Status</span>
-                <span className="inline-flex items-center gap-1 text-amber-700 font-semibold bg-amber-50 px-1.5 py-0.5 rounded text-[11px]">
-                  <AlertTriangle className="w-3 h-3 text-amber-600" />
-                  Needs review
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Safety Checks Card */}
-          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs space-y-2.5">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-900">
-              Safety checks
-            </h3>
-            <div className="space-y-2 text-xs">
-              <div className="flex items-center gap-2 text-gray-700">
-                <CheckCircle2 className="w-4 h-4 text-[#0D6D4E] shrink-0" />
-                <span>File format is valid</span>
-              </div>
-              <div className="flex items-center gap-2 text-gray-700">
-                <CheckCircle2 className="w-4 h-4 text-[#0D6D4E] shrink-0" />
-                <span>File size 1.4 MB (limit 25 MB)</span>
-              </div>
-              <div className="flex items-center gap-2 text-gray-700">
-                <CheckCircle2 className="w-4 h-4 text-[#0D6D4E] shrink-0" />
-                <span>No viruses detected</span>
-              </div>
-              <div className="flex items-center gap-2 text-gray-700">
-                <CheckCircle2 className="w-4 h-4 text-[#0D6D4E] shrink-0" />
-                <span>No sensitive macros</span>
-              </div>
+              <DetailRow label="Source" value={sourceName} />
+              <DetailRow label="File" value={upload.fileName} />
+              <DetailRow label="Size" value={`${upload.fileSizeKb} KB`} />
+              <DetailRow label="Contains" value={upload.contains === 'full' ? 'All products (full list)' : 'Partial update'} />
+              <DetailRow label="Uploaded by" value={state.currentUser.name} />
             </div>
           </div>
 
           {/* Detected Layout Card */}
-          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs space-y-2">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-900">
-              Detected layout
-            </h3>
-            <div className="space-y-1 text-xs">
-              <div className="flex justify-between py-1 border-b border-gray-50">
-                <span className="text-gray-500">Format</span>
-                <span className="font-medium text-gray-900">RetailOne (v3)</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-gray-50">
-                <span className="text-gray-500">Products sheet</span>
-                <span className="font-medium text-gray-900">Item_Master</span>
-              </div>
-              <div className="flex justify-between py-1">
-                <span className="text-gray-500">Columns</span>
-                <span className="font-medium text-gray-900">18 (recognised)</span>
+          {template && (
+            <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs space-y-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-900">
+                Detected layout
+              </h3>
+              <div className="space-y-1 text-xs">
+                <DetailRow label="Format" value={`${template.name} (v${template.version})`} />
+                <DetailRow label="Columns" value={`${Object.keys(template.fields).length} (recognised)`} />
               </div>
             </div>
-            <button
-              onClick={() => navigate('category-mapping')}
-              className="text-xs text-[#0D6D4E] font-medium hover:underline pt-1 block"
-            >
-              View detected columns
-            </button>
-          </div>
+          )}
 
           {/* Action Buttons */}
           <div className="space-y-2 pt-2">
             <button
-              onClick={handleConfirmAndApply}
+              onClick={handleConfirm}
               className="w-full py-2.5 text-xs font-bold text-white bg-[#0D6D4E] hover:bg-[#0b5c42] rounded-lg transition-colors shadow-xs"
             >
               Confirm and apply
             </button>
             <button
-              onClick={() => navigate('dashboard')}
+              onClick={handleCancel}
               className="w-full py-2 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             >
               Cancel
@@ -517,3 +451,19 @@ export const UploadReviewView: React.FC = () => {
     </div>
   );
 };
+
+const SummaryCard: React.FC<{ label: string; value: number; color?: string }> = ({ label, value, color }) => (
+  <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-xs">
+    <div className="text-[11px] text-gray-500">{label}</div>
+    <div className={`text-xl font-bold mt-1 ${color || 'text-gray-900'}`}>
+      {value.toLocaleString()}
+    </div>
+  </div>
+);
+
+const DetailRow: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+  <div className="flex justify-between py-1 border-b border-gray-50">
+    <span className="text-gray-500">{label}</span>
+    <span className="font-medium text-gray-900 text-right max-w-[60%] truncate">{value}</span>
+  </div>
+);

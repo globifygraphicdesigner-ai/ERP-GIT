@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
-import { Save, Store, Bell, Shield, Key } from 'lucide-react';
+import { Store, Shield, Bell, CheckCircle2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useDemo } from '../../demo';
 
 export const SettingsView: React.FC = () => {
-  const { selectedBranch, showToast } = useApp();
-  const [currency, setCurrency] = useState('QAR (Qatari Riyal)');
-  const [tolerance, setTolerance] = useState('0.00');
-  const [emailAlerts, setEmailAlerts] = useState(true);
+  const { showToast } = useApp();
+  const { state } = useDemo();
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,14 +18,14 @@ export const SettingsView: React.FC = () => {
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">
           Store & System Settings
         </h1>
-        <p className="text-xs text-gray-500 mt-0.5">
-          Configure parameters for {selectedBranch}, currency rules and mismatch tolerances.
+        <p className="text-xs text-gray-500 mt-1">
+          Configure parameters for {state.tenant.name} ({state.tenant.branch}), currency rules and reconciliation tolerances.
         </p>
       </div>
 
       <form onSubmit={handleSave} className="space-y-6">
         {/* Store Profile */}
-        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-xs space-y-4">
+        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm space-y-4">
           <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
             <Store className="w-4 h-4 text-[#0D6D4E]" />
             <h2 className="text-sm font-bold text-gray-900">Store Profile</h2>
@@ -34,112 +33,108 @@ export const SettingsView: React.FC = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
             <div>
-              <label className="block font-medium text-gray-900 mb-1">
+              <label className="block font-medium text-gray-700 mb-1">
                 Store Name
               </label>
               <input
                 type="text"
-                defaultValue="Doha Fresh Markets"
-                className="w-full border border-gray-200 rounded-lg p-2 bg-gray-50 font-medium"
+                readOnly
+                value={state.tenant.name}
+                className="w-full border border-gray-200 rounded-lg p-2.5 bg-gray-50 font-medium text-gray-800"
               />
             </div>
 
             <div>
-              <label className="block font-medium text-gray-900 mb-1">
+              <label className="block font-medium text-gray-700 mb-1">
                 Branch Location
               </label>
               <input
                 type="text"
-                defaultValue="Al Waab Branch, Qatar"
-                className="w-full border border-gray-200 rounded-lg p-2 bg-gray-50 font-medium"
+                readOnly
+                value={`${state.tenant.branch}, ${state.tenant.country}`}
+                className="w-full border border-gray-200 rounded-lg p-2.5 bg-gray-50 font-medium text-gray-800"
               />
             </div>
 
             <div>
-              <label className="block font-medium text-gray-900 mb-1">
-                Base Currency
-              </label>
-              <select
-                value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
-                className="w-full border border-gray-200 rounded-lg p-2 bg-white"
-              >
-                <option>QAR (Qatari Riyal)</option>
-                <option>SAR (Saudi Riyal)</option>
-                <option>AED (UAE Dirham)</option>
-                <option>KWD (Kuwaiti Dinar)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block font-medium text-gray-900 mb-1">
-                Price Discrepancy Tolerance (QAR)
+              <label className="block font-medium text-gray-700 mb-1">
+                ERP Integration
               </label>
               <input
                 type="text"
-                value={tolerance}
-                onChange={(e) => setTolerance(e.target.value)}
-                className="w-full border border-gray-200 rounded-lg p-2 bg-white font-mono"
+                readOnly
+                value={state.tenant.erpName}
+                className="w-full border border-gray-200 rounded-lg p-2.5 bg-gray-50 font-medium text-gray-800"
               />
-              <span className="text-[10px] text-gray-500 mt-1 block">
-                Differences smaller than this tolerance are considered in sync.
-              </span>
+            </div>
+
+            <div>
+              <label className="block font-medium text-gray-700 mb-1">
+                Base Currency & Timezone
+              </label>
+              <input
+                type="text"
+                readOnly
+                value={`${state.tenant.currency} (${state.tenant.timezone})`}
+                className="w-full border border-gray-200 rounded-lg p-2.5 bg-gray-50 font-medium text-gray-800"
+              />
             </div>
           </div>
         </div>
 
-        {/* Notifications & Automation */}
-        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-xs space-y-4">
+        {/* Reconciliation Rules */}
+        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm space-y-4">
           <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
-            <Bell className="w-4 h-4 text-[#0D6D4E]" />
-            <h2 className="text-sm font-bold text-gray-900">Notifications & Automation</h2>
+            <Shield className="w-4 h-4 text-[#0D6D4E]" />
+            <h2 className="text-sm font-bold text-gray-900">Reconciliation Rules</h2>
           </div>
 
-          <div className="space-y-3 text-xs">
-            <label className="flex items-center gap-3 cursor-pointer">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+            <div>
+              <label className="block font-medium text-gray-700 mb-1">
+                Price Tolerance (QAR)
+              </label>
               <input
-                type="checkbox"
-                checked={emailAlerts}
-                onChange={(e) => setEmailAlerts(e.target.checked)}
-                className="w-4 h-4 rounded accent-[#0D6D4E]"
+                type="text"
+                readOnly
+                value={`${state.settings.priceTolerance.toFixed(2)} QAR`}
+                className="w-full border border-gray-200 rounded-lg p-2.5 bg-gray-50 font-mono font-medium text-gray-800"
               />
-              <div>
-                <div className="font-semibold text-gray-900">
-                  Email discrepancy digests daily at 09:00
-                </div>
-                <div className="text-[11px] text-gray-500">
-                  Notify catalogue managers when stock or price discrepancies exceed 20 items.
-                </div>
-              </div>
-            </label>
+              <span className="text-[10px] text-gray-400 mt-1 block">
+                Prices differing by more than this trigger a mismatch.
+              </span>
+            </div>
 
-            <label className="flex items-center gap-3 cursor-pointer">
+            <div>
+              <label className="block font-medium text-gray-700 mb-1">
+                Rounding Step
+              </label>
               <input
-                type="checkbox"
-                defaultChecked
-                className="w-4 h-4 rounded accent-[#0D6D4E]"
+                type="text"
+                readOnly
+                value={`${state.settings.roundingStep.toFixed(2)} QAR`}
+                className="w-full border border-gray-200 rounded-lg p-2.5 bg-gray-50 font-mono font-medium text-gray-800"
               />
-              <div>
-                <div className="font-semibold text-gray-900">
-                  Auto-alert when marketplace data is older than 12 hours
-                </div>
-                <div className="text-[11px] text-gray-500">
-                  Show dashboard warnings if latest marketplace updates are stale.
-                </div>
-              </div>
-            </label>
+              <span className="text-[10px] text-gray-400 mt-1 block">
+                Rounding applied to computed expected prices.
+              </span>
+            </div>
+
+            <div>
+              <label className="block font-medium text-gray-700 mb-1">
+                Stale File Warning (Hours)
+              </label>
+              <input
+                type="text"
+                readOnly
+                value={`${state.settings.staleHours} hours`}
+                className="w-full border border-gray-200 rounded-lg p-2.5 bg-gray-50 font-mono font-medium text-gray-800"
+              />
+              <span className="text-[10px] text-gray-400 mt-1 block">
+                Uploads older than this display as stale on dashboard.
+              </span>
+            </div>
           </div>
-        </div>
-
-        {/* Action Button */}
-        <div className="flex justify-end">
-          <button
-            type="submit"
-            className="inline-flex items-center gap-2 px-6 py-2.5 text-xs font-semibold text-white bg-[#0D6D4E] hover:bg-[#0b5c42] rounded-lg shadow-xs transition-colors"
-          >
-            <Save className="w-4 h-4" />
-            <span>Save settings</span>
-          </button>
         </div>
       </form>
     </div>
